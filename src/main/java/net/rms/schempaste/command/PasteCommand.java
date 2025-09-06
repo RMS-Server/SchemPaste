@@ -14,6 +14,7 @@ import net.rms.schempaste.core.SchematicIndex;
 import net.rms.schempaste.litematica.LitematicFile;
 import net.rms.schempaste.paste.PasteEngine;
 import net.rms.schempaste.paste.ReplaceBehavior;
+import net.rms.schempaste.util.LayerRange;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -98,13 +99,14 @@ public class PasteCommand {
                 SchemPaste.PasteEngineHolder.ensure(server, SchemPaste.INSTANCE);
                 PasteEngine engine = SchemPaste.PasteEngineHolder.engine;
                 ReplaceBehavior replaceOverride = null;
-                int rateOverride = -1;
+                LayerRange layerRange = null;
                 if (paramsStr != null && !paramsStr.isEmpty()) {
                     Parsed p = parseParams(paramsStr);
                     replaceOverride = p.replace;
-                    rateOverride = p.rate;
+                    // Build LayerRange with command parameters and config fallbacks
+                    layerRange = buildLayerRange(p, SchemPaste.PasteEngineHolder.cfg);
                 }
-                engine.enqueuePaste(lf, placement, world, replaceOverride, rateOverride);
+                engine.enqueuePaste(lf, placement, world, replaceOverride, layerRange);
                 feedback(src, "Paste queued: " + name, true);
             } catch (Exception e) {
                 SchemPaste.LOGGER.error("Paste failed", e);
@@ -127,17 +129,117 @@ public class PasteCommand {
                 if (val != null) {
                     out.replace = ReplaceBehavior.fromString(val);
                 }
-            } else if (lower.equals("rate")) {
+            } else if (lower.equals("axis")) {
+                String val = (i + 1 < toks.length) ? toks[++i].toLowerCase() : null;
+                if (val != null && (val.equals("x") || val.equals("y") || val.equals("z"))) {
+                    out.layerAxis = val;
+                }
+            } else if (lower.equals("mode")) {
+                String val = (i + 1 < toks.length) ? toks[++i].toLowerCase() : null;
+                if (val != null) {
+                    out.layerMode = val;
+                }
+            } else if (lower.equals("single")) {
                 String val = (i + 1 < toks.length) ? toks[++i] : null;
                 if (val != null) {
                     try {
-                        out.rate = Math.max(1, Integer.parseInt(val));
+                        out.layerSingle = Integer.parseInt(val);
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            } else if (lower.equals("above")) {
+                String val = (i + 1 < toks.length) ? toks[++i] : null;
+                if (val != null) {
+                    try {
+                        out.layerAbove = Integer.parseInt(val);
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            } else if (lower.equals("below")) {
+                String val = (i + 1 < toks.length) ? toks[++i] : null;
+                if (val != null) {
+                    try {
+                        out.layerBelow = Integer.parseInt(val);
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            } else if (lower.equals("rangemin")) {
+                String val = (i + 1 < toks.length) ? toks[++i] : null;
+                if (val != null) {
+                    try {
+                        out.layerRangeMin = Integer.parseInt(val);
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            } else if (lower.equals("rangemax")) {
+                String val = (i + 1 < toks.length) ? toks[++i] : null;
+                if (val != null) {
+                    try {
+                        out.layerRangeMax = Integer.parseInt(val);
                     } catch (NumberFormatException ignored) {
                     }
                 }
             }
         }
         return out;
+    }
+
+    private static LayerRange buildLayerRange(Parsed p, net.rms.schempaste.config.SchemPasteConfig cfg) {
+        // Use command parameters if provided, otherwise fall back to config defaults
+        String axisStr = p.layerAxis != null ? p.layerAxis : (cfg.defaultLayerAxis != null ? cfg.defaultLayerAxis : "y");
+        String modeStr = p.layerMode != null ? p.layerMode : (cfg.defaultLayerMode != null ? cfg.defaultLayerMode : "all");
+        
+        axisStr = axisStr.trim().toLowerCase();
+        modeStr = modeStr.trim().toLowerCase();
+        
+        // Parse axis
+        net.minecraft.util.math.Direction.Axis axis;
+        switch (axisStr) {
+            case "x":
+                axis = net.minecraft.util.math.Direction.Axis.X;
+                break;
+            case "z":
+                axis = net.minecraft.util.math.Direction.Axis.Z;
+                break;
+            default:
+                axis = net.minecraft.util.math.Direction.Axis.Y;
+                break;
+        }
+        
+        // Parse mode
+        LayerRange.LayerMode mode;
+        switch (modeStr) {
+            case "single_layer":
+            case "single":
+                mode = LayerRange.LayerMode.SINGLE_LAYER;
+                break;
+            case "all_above":
+                mode = LayerRange.LayerMode.ALL_ABOVE;
+                break;
+            case "all_below":
+                mode = LayerRange.LayerMode.ALL_BELOW;
+                break;
+            case "layer_range":
+            case "range":
+                mode = LayerRange.LayerMode.LAYER_RANGE;
+                break;
+            default:
+                mode = LayerRange.LayerMode.ALL;
+                break;
+        }
+        
+        // Get coordinate values, use command params if available, otherwise config defaults
+        int single = p.layerSingle != null ? p.layerSingle : cfg.defaultLayerSingle;
+        int above = p.layerAbove != null ? p.layerAbove : cfg.defaultLayerAbove;
+        int below = p.layerBelow != null ? p.layerBelow : cfg.defaultLayerBelow;
+        int rangeMin = p.layerRangeMin != null ? p.layerRangeMin : cfg.defaultLayerRangeMin;
+        int rangeMax = p.layerRangeMax != null ? p.layerRangeMax : cfg.defaultLayerRangeMax;
+        
+        if (mode == LayerRange.LayerMode.ALL) {
+            return new LayerRange(mode, axis, 0, 0, 0, Integer.MIN_VALUE, Integer.MAX_VALUE);
+        }
+        
+        return new LayerRange(mode, axis, single, above, below, rangeMin, rangeMax);
     }
 
     private static int executeStopAll(CommandContext<ServerCommandSource> ctx) {
@@ -219,6 +321,12 @@ public class PasteCommand {
 
     private static class Parsed {
         ReplaceBehavior replace;
-        int rate = -1;
+        String layerAxis;
+        String layerMode;
+        Integer layerSingle;
+        Integer layerAbove;
+        Integer layerBelow;
+        Integer layerRangeMin;
+        Integer layerRangeMax;
     }
 }

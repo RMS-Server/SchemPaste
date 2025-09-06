@@ -550,16 +550,11 @@ public class PasteEngine {
     }
 
     public void enqueuePaste(LitematicFile file, PlacementConfig.Placement placement, ServerWorld world) {
-        enqueuePaste(file, placement, world, null, -1, null);
+        enqueuePaste(file, placement, world, null, null);
     }
 
     public void enqueuePaste(LitematicFile file, PlacementConfig.Placement placement, ServerWorld world,
-                             ReplaceBehavior replaceOverride, int rateOverride) {
-        enqueuePaste(file, placement, world, replaceOverride, rateOverride, null);
-    }
-
-    public void enqueuePaste(LitematicFile file, PlacementConfig.Placement placement, ServerWorld world,
-                             ReplaceBehavior replaceOverride, int rateOverride, LayerRange layerRange) {
+                             ReplaceBehavior replaceOverride, LayerRange layerRange) {
 
         String jobId = UUID.randomUUID().toString();
         String name = file.name != null && !file.name.isEmpty() ? file.name : placement.fileName;

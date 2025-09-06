@@ -101,7 +101,7 @@ public class SchemPaste implements ModInitializer {
             if (engine == null || lastServer != server) {
                 LOGGER.info("Creating new advanced PasteEngine for server");
                 Path runDir = java.nio.file.Paths.get("");
-                Path configDir = runDir.resolve("config").resolve("syncmatica");
+                Path configDir = runDir.resolve("config");
                 try {
                     cfg = SchemPasteConfig.load(configDir);
                     LOGGER.info("Loaded SchemPasteConfig");
