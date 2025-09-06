@@ -44,3 +44,5 @@ test/
 # references (not part of build)
 /reference_copy/
 /temple/
+
+.editorconfig

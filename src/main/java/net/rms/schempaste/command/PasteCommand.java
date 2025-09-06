@@ -37,7 +37,6 @@ public class PasteCommand {
         dispatcher.register(root);
     }
 
-    
 
     private static int executeByIndex(CommandContext<ServerCommandSource> ctx,
                                       java.nio.file.Path configDir,
@@ -115,7 +114,7 @@ public class PasteCommand {
 
         return 1;
     }
-    
+
 
     private static Parsed parseParams(String params) {
         Parsed out = new Parsed();
@@ -202,11 +201,6 @@ public class PasteCommand {
         return 1;
     }
 
-    private static class Parsed {
-        ReplaceBehavior replace;
-        int rate = -1;
-    }
-
     private static void feedback(ServerCommandSource src, String msg, boolean broadcast) {
         //#if MC < 12000
         src.sendFeedback(new net.minecraft.text.LiteralText(msg), broadcast);
@@ -221,5 +215,10 @@ public class PasteCommand {
         //#else
         //$$ src.sendError(net.minecraft.text.Text.literal(msg));
         //#endif
+    }
+
+    private static class Parsed {
+        ReplaceBehavior replace;
+        int rate = -1;
     }
 }

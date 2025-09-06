@@ -4,9 +4,8 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.text.LiteralText;
-import net.rms.schempaste.core.SchematicIndex;
 import net.rms.schempaste.config.PlacementConfig;
+import net.rms.schempaste.core.SchematicIndex;
 
 import java.io.IOException;
 

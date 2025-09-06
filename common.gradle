@@ -47,22 +47,22 @@ if (mcVersion < 11700) {
 }
 
 def javaVersionNumber = (
-        javaCompatibility == JavaVersion.VERSION_1_8 ? '8' :
+    javaCompatibility == JavaVersion.VERSION_1_8 ? '8' :
         (javaCompatibility == JavaVersion.VERSION_16 ? '16' :
-        (javaCompatibility == JavaVersion.VERSION_17 ? '17' : '21'))
+            (javaCompatibility == JavaVersion.VERSION_17 ? '17' : '21'))
 )
 
 processResources {
     filesMatching('fabric.mod.json') {
         expand id: id,
-               version: project.rootProject.version,
-               minecraft_version: project.name,
-               loader_version: loader_version,
-               java_version: javaVersionNumber
+            version: project.rootProject.version,
+            minecraft_version: project.name,
+            loader_version: loader_version,
+            java_version: javaVersionNumber
     }
     filesMatching("${id}.mixins.json") {
         expand java_version: javaVersionNumber,
-               id: id
+            id: id
     }
 }
 

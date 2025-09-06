@@ -65,6 +65,7 @@ public class PasteEngine {
     private volatile double lastTickMsProgress = 0.0;
     private volatile int lastDynamicBudget = 1;
     private volatile double avgPerBlockMsEstimate = 1.0;
+
     public PasteEngine(MinecraftServer server, SchemPasteConfig cfg) {
         this.server = server;
         this.cfg = cfg;

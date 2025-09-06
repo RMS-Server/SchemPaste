@@ -52,9 +52,9 @@ public class SchemPaste implements ModInitializer {
 
         //#if MC<12000
         net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback.EVENT.register((dispatcher, dedicated) -> {
-        //#else
-        //$$ net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-        //#endif
+            //#else
+            //$$ net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+            //#endif
 
             Path runDir = java.nio.file.Paths.get("");
             Path configDir = runDir.resolve("config").resolve("syncmatica");

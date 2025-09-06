@@ -1,10 +1,8 @@
 package net.rms.schempaste.paste;
 
 public enum ReplaceBehavior {
-    NONE,
-    ALL,
-    WITH_NON_AIR;
-
+    NONE, ALL, WITH_NON_AIR;
+    
     public static ReplaceBehavior fromString(String s) {
         if (s == null) return ALL;
         String v = s.trim().toLowerCase();
@@ -19,7 +17,7 @@ public enum ReplaceBehavior {
                 return ALL;
         }
     }
-
+    
     public String asString() {
         switch (this) {
             case NONE:

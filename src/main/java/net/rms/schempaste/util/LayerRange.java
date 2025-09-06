@@ -11,6 +11,7 @@ public class LayerRange {
     private final int layerBelow;
     private final int layerRangeMin;
     private final int layerRangeMax;
+
     public LayerRange(LayerMode mode, Axis axis,
                       int single, int above, int below, int min, int max) {
         this.mode = mode == null ? LayerMode.ALL : mode;
