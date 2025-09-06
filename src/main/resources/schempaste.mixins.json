@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "net.rms.schempaste.mixin",
+  "refmap": "${id}.refmap.json",
+  "compatibilityLevel": "JAVA_${java_version}",
+  "mixins": [
+    "world.WorldUpdateSuppressorMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}

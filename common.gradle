@@ -1,0 +1,76 @@
+apply plugin: 'fabric-loom'
+apply plugin: 'com.replaymod.preprocess'
+
+base {
+    archivesName = "${id}-${name}"
+}
+
+repositories {
+    maven { name = 'Fabric'; url = 'https://maven.fabricmc.net/' }
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${name}"
+    mappings "net.fabricmc:yarn:${name}+build.${yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
+    implementation("org.tukaani:xz:1.10")
+    include("org.tukaani:xz:1.10")
+}
+
+loom {
+    if (file("${id}.accesswidener").exists()) {
+        accessWidenerPath = file "${id}.accesswidener"
+    }
+    mixin {
+        defaultRefmapName = "${id}.refmap.json"
+    }
+    runs {
+        server {
+            property("mixin.debug.export", "true")
+            ideConfigGenerated true
+        }
+        remove client
+    }
+}
+
+JavaVersion javaCompatibility
+if (mcVersion < 11700) {
+    javaCompatibility = JavaVersion.VERSION_1_8
+} else if (mcVersion < 11800) {
+    javaCompatibility = JavaVersion.VERSION_16
+} else if (mcVersion < 12005) {
+    javaCompatibility = JavaVersion.VERSION_17
+} else {
+    javaCompatibility = JavaVersion.VERSION_21
+}
+
+def javaVersionNumber = (
+        javaCompatibility == JavaVersion.VERSION_1_8 ? '8' :
+        (javaCompatibility == JavaVersion.VERSION_16 ? '16' :
+        (javaCompatibility == JavaVersion.VERSION_17 ? '17' : '21'))
+)
+
+processResources {
+    filesMatching('fabric.mod.json') {
+        expand id: id,
+               version: project.rootProject.version,
+               minecraft_version: project.name,
+               loader_version: loader_version,
+               java_version: javaVersionNumber
+    }
+    filesMatching("${id}.mixins.json") {
+        expand java_version: javaVersionNumber,
+               id: id
+    }
+}
+
+java {
+    sourceCompatibility = javaCompatibility
+    targetCompatibility = javaCompatibility
+}
+
+jar {
+    from '../../LICENSE'
+}
