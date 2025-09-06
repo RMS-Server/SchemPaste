@@ -4,6 +4,12 @@
 
 一个帮助您在服务器中粘贴 Litematica 原理图的 Minecraft Fabric 模组。
 
+## 依赖
+
+[![Fabric Loader](https://img.shields.io/badge/Fabric%20Loader-0.14.8+-brightgreen?style=flat-square&logo=fabricmc&logoColor=white)](https://fabricmc.net/)
+[![Fabric API](https://img.shields.io/badge/Fabric%20API-Required-orange?style=flat-square&logo=fabricmc&logoColor=white)](https://github.com/FabricMC/fabric)
+[![Syncmatica](https://img.shields.io/badge/Syncmatica-Required-blue?style=flat-square&logo=minecraft&logoColor=white)](https://github.com/End-Tech/syncmatica)
+
 ## 命令详解
 
 ### 主命令
@@ -140,6 +146,10 @@
 1. 安装 Fabric Loader
 2. 下载模组 jar 文件
 3. 将文件放入 `mods` 文件夹
+
+## TODO
+
+- 脱离对于Syncmatica 的依赖，可以直接从客户端获取.litematica 文件
 
 ## 许可证
 

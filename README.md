@@ -4,6 +4,12 @@
 
 A Minecraft Fabric mod that helps you paste Litematica schematics on servers.
 
+## Dependencies
+
+[![Fabric Loader](https://img.shields.io/badge/Fabric%20Loader-0.14.8+-brightgreen?style=flat-square&logo=fabricmc&logoColor=white)](https://fabricmc.net/)
+[![Fabric API](https://img.shields.io/badge/Fabric%20API-Required-orange?style=flat-square&logo=fabricmc&logoColor=white)](https://github.com/FabricMC/fabric)
+[![Syncmatica](https://img.shields.io/badge/Syncmatica-Required-blue?style=flat-square&logo=minecraft&logoColor=white)](https://github.com/End-Tech/syncmatica)
+
 ## Command Details
 
 ### Main Commands
@@ -140,6 +146,10 @@ All commands require OP permissions
 1. Install Fabric Loader
 2. Download the mod jar file
 3. Place the file in the `mods` folder
+
+## TODO
+
+- Remove dependency on Syncmatica, allow direct loading of .litematica files from client
 
 ## License
 
