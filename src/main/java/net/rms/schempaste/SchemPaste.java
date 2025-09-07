@@ -48,7 +48,7 @@ public class SchemPaste implements ModInitializer {
     @Override
     public void onInitialize() {
         INSTANCE = this;
-        LOGGER.info("SchemPaste initializing");
+        // LOGGER.info("SchemPaste initializing");
 
         //#if MC<12000
         net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback.EVENT.register((dispatcher, dedicated) -> {
@@ -99,19 +99,18 @@ public class SchemPaste implements ModInitializer {
 
         public static void ensure(MinecraftServer server, SchemPaste mod) {
             if (engine == null || lastServer != server) {
-                LOGGER.info("Creating new advanced PasteEngine for server");
                 Path runDir = java.nio.file.Paths.get("");
                 Path configDir = runDir.resolve("config");
                 try {
                     cfg = SchemPasteConfig.load(configDir);
-                    LOGGER.info("Loaded SchemPasteConfig");
+                    // LOGGER.info("Loaded SchemPasteConfig");
                 } catch (Exception e) {
-                    LOGGER.error("Failed to load SchemPasteConfig, using defaults", e);
+                    LOGGER.warn("Failed to load SchemPasteConfig, using defaults");
                     cfg = new SchemPasteConfig();
                 }
                 engine = new PasteEngine(server, cfg);
                 lastServer = server;
-                LOGGER.info("Advanced PasteEngine created successfully");
+                // LOGGER.info("SchemPaste initialized successfully");
             }
         }
     }

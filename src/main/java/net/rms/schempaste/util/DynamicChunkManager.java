@@ -55,8 +55,8 @@ public class DynamicChunkManager {
                 long now = System.currentTimeMillis();
                 long last = lastCapacityLogMs.get();
                 if (now - last >= CAPACITY_LOG_THROTTLE_MS && lastCapacityLogMs.compareAndSet(last, now)) {
-                    SchemPaste.LOGGER.info("Capacity reached: waiting for eviction to free a slot ({}/{})",
-                            currentlyLoaded.get(), config.maxLoadedChunks);
+                    // SchemPaste.LOGGER.info("Capacity reached: waiting for eviction to free a slot ({}/{})",
+                    //         currentlyLoaded.get(), config.maxLoadedChunks);
                 }
                 return false;
             }
@@ -69,11 +69,11 @@ public class DynamicChunkManager {
             currentlyLoaded.incrementAndGet();
 
 
-            if (config.maxLoadedChunks > 0) {
-                SchemPaste.LOGGER.debug("Loaded chunk {} ({}/{})", chunkPos, currentlyLoaded.get(), config.maxLoadedChunks);
-            } else {
-                SchemPaste.LOGGER.debug("Loaded chunk {} (unlimited)", chunkPos);
-            }
+            // if (config.maxLoadedChunks > 0) {
+            //     SchemPaste.LOGGER.debug("Loaded chunk {} ({}/{})", chunkPos, currentlyLoaded.get(), config.maxLoadedChunks);
+            // } else {
+            //     SchemPaste.LOGGER.debug("Loaded chunk {} (unlimited)", chunkPos);
+            // }
             return true;
         }
 
@@ -119,12 +119,12 @@ public class DynamicChunkManager {
                         currentlyLoaded.decrementAndGet();
                         processed++;
 
-                        if (config.maxLoadedChunks > 0) {
-                            SchemPaste.LOGGER.debug("Unloaded chunk {} ({}/{})",
-                                    chunkPos, currentlyLoaded.get(), config.maxLoadedChunks);
-                        } else {
-                            SchemPaste.LOGGER.debug("Unloaded chunk {} (unlimited)", chunkPos);
-                        }
+                        // if (config.maxLoadedChunks > 0) {
+                        //     SchemPaste.LOGGER.debug("Unloaded chunk {} ({}/{})",
+                        //             chunkPos, currentlyLoaded.get(), config.maxLoadedChunks);
+                        // } else {
+                        //     SchemPaste.LOGGER.debug("Unloaded chunk {} (unlimited)", chunkPos);
+                        // }
                     } else {
 
                         unloadQueue.offer(chunkPos);
@@ -213,7 +213,7 @@ public class DynamicChunkManager {
             if (loadedChunks.remove(oldest) != null) {
                 currentlyLoaded.decrementAndGet();
             }
-            SchemPaste.LOGGER.debug("Evicted oldest chunk {} to free capacity", oldest);
+            // SchemPaste.LOGGER.debug("Evicted oldest chunk {} to free capacity", oldest);
             return true;
         }
         return false;
@@ -230,7 +230,7 @@ public class DynamicChunkManager {
     }
 
     public void shutdown() {
-        SchemPaste.LOGGER.info("Shutting down DynamicChunkManager, unloading {} chunks", loadedChunks.size());
+        // SchemPaste.LOGGER.info("Shutting down DynamicChunkManager, unloading {} chunks", loadedChunks.size());
 
 
         for (ChunkPos chunkPos : loadedChunks.keySet()) {

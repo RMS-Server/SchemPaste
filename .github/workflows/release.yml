@@ -59,7 +59,6 @@ jobs:
           path: versions/${{ matrix.minecraft_version }}/build/libs/*.jar
           if-no-files-found: error
   Publish-Modrinth-Matrix:
-    if: ${{ false }}
     runs-on: ubuntu-24.04
     needs: [ Build-Matrix, Get-Versions ]
     strategy:

@@ -23,21 +23,21 @@ public class LitematicFile {
     }
 
     public static LitematicFile load(Path path) throws IOException {
-        SchemPaste.LOGGER.info("Loading litematica file: {}", path.toString());
+        // SchemPaste.LOGGER.info("Loading litematica file: {}", path.toString());
         NbtCompound root = NbtReaders.readCompressedAuto(path);
-        SchemPaste.LOGGER.debug("Root NBT keys: {}", root.getKeys());
+        // SchemPaste.LOGGER.debug("Root NBT keys: {}", root.getKeys());
         String name = Optional.ofNullable(root.getCompound("Metadata")).map(t -> t.getString("Name")).orElse("");
-        SchemPaste.LOGGER.info("Litematica name: '{}'", name);
+        // SchemPaste.LOGGER.info("Litematica name: '{}'", name);
 
         Map<String, Region> regions = new LinkedHashMap<>();
         NbtCompound regionsTag = root.getCompound("Regions");
-        SchemPaste.LOGGER.info("Regions NBT compound: {}", regionsTag != null ? "found" : "null");
+        // SchemPaste.LOGGER.info("Regions NBT compound: {}", regionsTag != null ? "found" : "null");
         if (regionsTag != null) {
-            SchemPaste.LOGGER.info("Region keys: {}", regionsTag.getKeys());
+            // SchemPaste.LOGGER.info("Region keys: {}", regionsTag.getKeys());
             for (String regionName : regionsTag.getKeys()) {
-                SchemPaste.LOGGER.info("Processing region: {}", regionName);
+                // SchemPaste.LOGGER.info("Processing region: {}", regionName);
                 NbtCompound r = regionsTag.getCompound(regionName);
-                SchemPaste.LOGGER.debug("Region '{}' NBT keys: {}", regionName, r.getKeys());
+                // SchemPaste.LOGGER.debug("Region '{}' NBT keys: {}", regionName, r.getKeys());
 
 
                 NbtCompound sizeCompound = r.getCompound("Size");
@@ -58,7 +58,7 @@ public class LitematicFile {
                         posCompound.getInt("y"),
                         posCompound.getInt("z")
                 );
-                SchemPaste.LOGGER.info("Region '{}' size: {}x{}x{}, relPos: {}", regionName, size.getX(), size.getY(), size.getZ(), relPos);
+                // SchemPaste.LOGGER.info("Region '{}' size: {}x{}x{}, relPos: {}", regionName, size.getX(), size.getY(), size.getZ(), relPos);
 
                 NbtList paletteTag = r.getList("BlockStatePalette", NbtElement.COMPOUND_TYPE);
                 long[] states = r.getLongArray("BlockStates");
@@ -66,7 +66,7 @@ public class LitematicFile {
                     SchemPaste.LOGGER.warn("Region '{}' missing palette or states data", regionName);
                     continue;
                 }
-                SchemPaste.LOGGER.info("Region '{}' palette size: {}, states length: {}", regionName, paletteTag.size(), states.length);
+                // SchemPaste.LOGGER.info("Region '{}' palette size: {}, states length: {}", regionName, paletteTag.size(), states.length);
                 List<BlockState> palette = BlockStatePaletteUtil.decode(paletteTag);
                 int bits = Math.max(2, 32 - Integer.numberOfLeadingZeros(Math.max(1, palette.size() - 1)));
                 PackedBitArray storage = new PackedBitArray(bits, states);
@@ -109,10 +109,10 @@ public class LitematicFile {
                 }
 
                 regions.put(regionName, new Region(regionName, size, relPos, palette, storage, tiles, entities, blockTicks, fluidTicks));
-                SchemPaste.LOGGER.info("Successfully loaded region: {}", regionName);
+                // SchemPaste.LOGGER.info("Successfully loaded region: {}", regionName);
             }
         }
-        SchemPaste.LOGGER.info("Loaded {} regions total", regions.size());
+        // SchemPaste.LOGGER.info("Loaded {} regions total", regions.size());
         return new LitematicFile(name, regions);
     }
 

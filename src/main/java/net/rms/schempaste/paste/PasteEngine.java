@@ -184,9 +184,9 @@ public class PasteEngine {
                                     long now = System.currentTimeMillis();
                                     long last = job.lastStatusLogMs.get();
                                     if (now - last >= 3000 && job.lastStatusLogMs.compareAndSet(last, now)) {
-                                        SchemPaste.LOGGER.info(
-                                                "Paste paused: waiting for chunk to load (capacity reached) [job={}]",
-                                                job.id.substring(0, Math.min(8, job.id.length())));
+                                        // SchemPaste.LOGGER.info(
+                                        //         "Paste paused: waiting for chunk to load (capacity reached) [job={}]",
+                                        //         job.id.substring(0, Math.min(8, job.id.length())));
                                     }
                                 }
                             }
@@ -196,9 +196,9 @@ public class PasteEngine {
                             long now = System.currentTimeMillis();
                             long last = job.lastStatusLogMs.get();
                             if (now - last >= 3000 && job.lastStatusLogMs.compareAndSet(last, now)) {
-                                SchemPaste.LOGGER.info(
-                                        "Paste resumed: chunk capacity available [job={}]",
-                                        job.id.substring(0, Math.min(8, job.id.length())));
+                                // SchemPaste.LOGGER.info(
+                                //         "Paste resumed: chunk capacity available [job={}]",
+                                //         job.id.substring(0, Math.min(8, job.id.length())));
                             }
                         }
 
@@ -511,24 +511,24 @@ public class PasteEngine {
             slowStr = sb.toString();
         }
 
-        SchemPaste.LOGGER.info(
-                "Status: jobs={}, {}; chunks={}; TPS={}; MSPT={}; tick{{chunks={}ms({}%), queue={}ms({}%), progress={}ms({}%), other={}ms({}%))}}{}{}",
-                s.jobs.size(),
-                prog.toString(),
-                s.chunksLoaded,
-                String.format(java.util.Locale.ROOT, "%.1f", s.tps),
-                String.format(java.util.Locale.ROOT, "%.1f", s.mspt),
-                String.format(java.util.Locale.ROOT, "%.1f", s.msChunks),
-                String.format(java.util.Locale.ROOT, "%.0f", pctChunks),
-                String.format(java.util.Locale.ROOT, "%.1f", s.msQueue),
-                String.format(java.util.Locale.ROOT, "%.0f", pctQueue),
-                String.format(java.util.Locale.ROOT, "%.1f", s.msProgress),
-                String.format(java.util.Locale.ROOT, "%.0f", pctProgress),
-                String.format(java.util.Locale.ROOT, "%.1f", Math.max(0.0, otherMs)),
-                String.format(java.util.Locale.ROOT, "%.0f", Math.max(0.0, pctOther)),
-                queueDetail,
-                slowStr
-        );
+        // SchemPaste.LOGGER.info(
+        //         "Status: jobs={}, {}; chunks={}; TPS={}; MSPT={}; tick{{chunks={}ms({}%), queue={}ms({}%), progress={}ms({}%), other={}ms({}%))}}{}{}",
+        //         s.jobs.size(),
+        //         prog.toString(),
+        //         s.chunksLoaded,
+        //         String.format(java.util.Locale.ROOT, "%.1f", s.tps),
+        //         String.format(java.util.Locale.ROOT, "%.1f", s.mspt),
+        //         String.format(java.util.Locale.ROOT, "%.1f", s.msChunks),
+        //         String.format(java.util.Locale.ROOT, "%.0f", pctChunks),
+        //         String.format(java.util.Locale.ROOT, "%.1f", s.msQueue),
+        //         String.format(java.util.Locale.ROOT, "%.0f", pctQueue),
+        //         String.format(java.util.Locale.ROOT, "%.1f", s.msProgress),
+        //         String.format(java.util.Locale.ROOT, "%.0f", pctProgress),
+        //         String.format(java.util.Locale.ROOT, "%.1f", Math.max(0.0, otherMs)),
+        //         String.format(java.util.Locale.ROOT, "%.0f", Math.max(0.0, pctOther)),
+        //         queueDetail,
+        //         slowStr
+        // );
     }
 
     private void completeJob(PasteJob job) {
@@ -536,9 +536,9 @@ public class PasteEngine {
             activeJobs.remove(job.id);
             long duration = System.currentTimeMillis() - job.startTime;
 
-            SchemPaste.LOGGER.info("Paste completed [job={}]: placed {} blocks in {} ms",
-                    job.id.substring(0, Math.min(8, job.id.length())),
-                    job.placedBlocks.get(), duration);
+            // SchemPaste.LOGGER.info("Paste completed [job={}]: placed {} blocks in {} ms",
+            //         job.id.substring(0, Math.min(8, job.id.length())),
+            //         job.placedBlocks.get(), duration);
 
             for (var p : server.getPlayerManager().getPlayerList()) {
                 p.sendMessage(net.minecraft.text.Text.of(
@@ -592,7 +592,7 @@ public class PasteEngine {
             }
         }, backgroundExecutor);
 
-        SchemPaste.LOGGER.info("Started staged paste job [{}]: {}", jobId.substring(0, 8), name);
+        // SchemPaste.LOGGER.info("Started staged paste job [{}]: {}", jobId.substring(0, 8), name);
     }
 
     private void processLitematicFileBackground(ServerWorld world, LitematicFile file, PlacementConfig.Placement placement,
@@ -687,7 +687,7 @@ public class PasteEngine {
         }
 
         job.backgroundComplete.set(true);
-        SchemPaste.LOGGER.info("Background scheduling completed [job={}]", job.id.substring(0, 8));
+        // SchemPaste.LOGGER.info("Background scheduling completed [job={}]", job.id.substring(0, 8));
     }
 
     private void processRegionBackground(ServerWorld world, String regionName, LitematicFile.Region region,
@@ -855,9 +855,9 @@ public class PasteEngine {
             }
         }
 
-        SchemPaste.LOGGER.info(
-                "Region {} background pass [job={}]: scanned {}, skipped {} air, skipped {} structure_void, enqueued {}",
-                regionName, job.id.substring(0, 8), totalExamined, airSkipped, structureVoidSkipped, actuallyQueued);
+        // SchemPaste.LOGGER.info(
+        //         "Region {} background pass [job={}]: scanned {}, skipped {} air, skipped {} structure_void, enqueued {}",
+        //         regionName, job.id.substring(0, 8), totalExamined, airSkipped, structureVoidSkipped, actuallyQueued);
 
 
     }
