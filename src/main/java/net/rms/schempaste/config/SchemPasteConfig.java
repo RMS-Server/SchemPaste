@@ -11,14 +11,14 @@ import java.nio.file.Path;
 
 public class SchemPasteConfig {
     public static final String FILE_NAME = "schempaste.json";
-
-
+    
+    
     public int backgroundThreads = 2;
     public int mainThreadBudgetMs = 40;
-
-
+    
+    
     public String defaultReplace = "with_non_air";
-
+    
     public String defaultLayerAxis = "y";
     public String defaultLayerMode = "all";
     public int defaultLayerSingle = 0;
@@ -26,20 +26,20 @@ public class SchemPasteConfig {
     public int defaultLayerBelow = 0;
     public int defaultLayerRangeMin = 0;
     public int defaultLayerRangeMax = 0;
-
-
+    
+    
     public boolean enableProgressMessages = true;
     public long progressUpdateIntervalMs = 2000;
-
-
+    
+    
     public boolean enableDynamicChunkLoading = true;
     public int maxLoadedChunks = 32;
-
-
+    
+    
     public boolean fixChestMirror = true;
     public boolean clearInventories = false;
     public boolean suppressNeighborUpdates = true;
-
+    
     public static SchemPasteConfig load(Path configDir) throws IOException {
         Path path = configDir.resolve(FILE_NAME);
         Gson gson = new GsonBuilder().setPrettyPrinting().create();

@@ -16,10 +16,10 @@ import java.util.UUID;
 
 public class PlacementConfig {
     public static final String FILE_NAME = "placements.json";
-
+    
     @SerializedName("placements")
     public List<Placement> placements = new ArrayList<>();
-
+    
     public static PlacementConfig load(Path configDir) throws IOException {
         Path file = configDir.resolve(FILE_NAME);
         if (!Files.exists(file)) {
@@ -30,11 +30,11 @@ public class PlacementConfig {
             return Objects.requireNonNullElse(gson.fromJson(jr, PlacementConfig.class), new PlacementConfig());
         }
     }
-
+    
     public enum Rotation {NONE, CLOCKWISE_90, CLOCKWISE_180, COUNTERCLOCKWISE_90}
-
+    
     public enum Mirror {NONE, LEFT_RIGHT, FRONT_BACK}
-
+    
     public static class Placement {
         public String id;
         @SerializedName("file_name")
@@ -48,17 +48,17 @@ public class PlacementConfig {
         @SerializedName("subregionData")
         public List<Subregion> subregions = new ArrayList<>();
     }
-
+    
     public static class Origin {
         public int[] position;
         public String dimension;
     }
-
+    
     public static class Owner {
         public UUID uuid;
         public String name;
     }
-
+    
     public static class Subregion {
         public int[] position;
         public String name;

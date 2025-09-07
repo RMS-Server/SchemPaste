@@ -14,8 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class DynamicChunkManager {
 
-    private static final ChunkTicketType<ChunkPos> SCHEMPASTE_TICKET =
-            ChunkTicketType.create("schempaste", (pos1, pos2) -> Long.compare(ChunkPos.toLong(pos1.x, pos1.z), ChunkPos.toLong(pos2.x, pos2.z)));
+    private static final ChunkTicketType<ChunkPos> SCHEMPASTE_TICKET = ChunkTicketType.create("schempaste", (pos1, pos2) -> Long.compare(ChunkPos.toLong(pos1.x, pos1.z), ChunkPos.toLong(pos2.x, pos2.z)));
     private static final long CAPACITY_LOG_THROTTLE_MS = 3000L;
     private final ServerWorld world;
     private final SchemPasteConfig config;
@@ -155,10 +154,11 @@ public class DynamicChunkManager {
     private void forceCleanupOldChunks() {
         if (config.maxLoadedChunks <= 0) return;
         int target = Math.max(1, Math.min(Math.max(1, getDynamicBatchSize()), Math.max(1, config.maxLoadedChunks / 10)));
-        var sortedChunks = loadedChunks.entrySet().stream()
-                .sorted((a, b) -> Long.compare(a.getValue().lastAccessTime.get(), b.getValue().lastAccessTime.get()))
-                .limit(target)
-                .toList();
+        var sortedChunks = loadedChunks.entrySet()
+            .stream()
+            .sorted((a, b) -> Long.compare(a.getValue().lastAccessTime.get(), b.getValue().lastAccessTime.get()))
+            .limit(target)
+            .toList();
         for (var entry : sortedChunks) {
             markChunkForUnload(entry.getKey());
         }

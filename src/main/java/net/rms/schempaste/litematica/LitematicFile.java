@@ -48,16 +48,8 @@ public class LitematicFile {
                     continue;
                 }
 
-                Vec3i size = new Vec3i(
-                        sizeCompound.getInt("x"),
-                        sizeCompound.getInt("y"),
-                        sizeCompound.getInt("z")
-                );
-                BlockPos relPos = new BlockPos(
-                        posCompound.getInt("x"),
-                        posCompound.getInt("y"),
-                        posCompound.getInt("z")
-                );
+                Vec3i size = new Vec3i(sizeCompound.getInt("x"), sizeCompound.getInt("y"), sizeCompound.getInt("z"));
+                BlockPos relPos = new BlockPos(posCompound.getInt("x"), posCompound.getInt("y"), posCompound.getInt("z"));
                 // SchemPaste.LOGGER.info("Region '{}' size: {}x{}x{}, relPos: {}", regionName, size.getX(), size.getY(), size.getZ(), relPos);
 
                 NbtList paletteTag = r.getList("BlockStatePalette", NbtElement.COMPOUND_TYPE);

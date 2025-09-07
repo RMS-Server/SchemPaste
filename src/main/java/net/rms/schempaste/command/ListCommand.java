@@ -10,18 +10,14 @@ import net.rms.schempaste.core.SchematicIndex;
 import java.io.IOException;
 
 public class ListCommand {
-    public static void register(CommandDispatcher<ServerCommandSource> dispatcher,
-                                java.nio.file.Path configDir,
-                                SchematicIndex index) {
+    public static void register(CommandDispatcher<ServerCommandSource> dispatcher, java.nio.file.Path configDir, SchematicIndex index) {
         LiteralArgumentBuilder<ServerCommandSource> root = CommandManager.literal("sp")
-                .requires(src -> src.hasPermissionLevel(2))
-                .then(CommandManager.literal("list")
-                        .executes(ctx -> execute(ctx.getSource(), configDir, index))
-                );
-
+            .requires(src -> src.hasPermissionLevel(2))
+            .then(CommandManager.literal("list").executes(ctx -> execute(ctx.getSource(), configDir, index)));
+        
         dispatcher.register(root);
     }
-
+    
     private static int execute(ServerCommandSource src, java.nio.file.Path configDir, SchematicIndex index) {
         PlacementConfig cfg;
         try {
@@ -34,14 +30,14 @@ public class ListCommand {
             //#endif
             return 0;
         }
-
+        
         java.util.List<PlacementConfig.Placement> items = new java.util.ArrayList<>();
         for (PlacementConfig.Placement p : cfg.placements) {
             if (p != null && p.fileName != null && !p.fileName.isEmpty()) {
                 items.add(p);
             }
         }
-
+        
         //#if MC < 12000
         src.sendFeedback(new net.minecraft.text.LiteralText("Available placements: " + items.size()), false);
         //#else

@@ -21,28 +21,22 @@ import java.nio.file.Path;
 import java.util.Optional;
 
 public class PasteCommand {
-    public static void register(CommandDispatcher<ServerCommandSource> dispatcher,
-                                java.nio.file.Path configDir,
-                                SchematicIndex index) {
+    public static void register(CommandDispatcher<ServerCommandSource> dispatcher, java.nio.file.Path configDir, SchematicIndex index) {
         LiteralArgumentBuilder<ServerCommandSource> root = CommandManager.literal("sp")
-                .requires(src -> src.hasPermissionLevel(2))
-                .then(CommandManager.literal("paste")
-                        .then(CommandManager.literal("stop")
-                                .executes(PasteCommand::executeStopAll))
-                        .then(CommandManager.argument("index", IntegerArgumentType.integer(1))
-                                .executes(ctx -> executeByIndex(ctx, configDir, index, null))
-                                .then(CommandManager.literal("addition")
-                                        .then(CommandManager.argument("params", StringArgumentType.greedyString())
-                                                .executes(ctx -> executeByIndex(ctx, configDir, index, StringArgumentType.getString(ctx, "params")))))));
+            .requires(src -> src.hasPermissionLevel(2))
+            .then(CommandManager.literal("paste")
+                .then(CommandManager.literal("stop").executes(PasteCommand::executeStopAll))
+                .then(CommandManager.argument("index", IntegerArgumentType.integer(1))
+                    .executes(ctx -> executeByIndex(ctx, configDir, index, null))
+                    .then(CommandManager.literal("addition")
+                        .then(CommandManager.argument("params", StringArgumentType.greedyString())
+                            .executes(ctx -> executeByIndex(ctx, configDir, index, StringArgumentType.getString(ctx, "params")))))));
 
         dispatcher.register(root);
     }
 
 
-    private static int executeByIndex(CommandContext<ServerCommandSource> ctx,
-                                      java.nio.file.Path configDir,
-                                      SchematicIndex index,
-                                      String params) {
+    private static int executeByIndex(CommandContext<ServerCommandSource> ctx, java.nio.file.Path configDir, SchematicIndex index, String params) {
 
         PlacementConfig config;
         try {

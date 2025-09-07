@@ -14,7 +14,7 @@ import java.util.List;
 public final class BlockStatePaletteUtil {
     private BlockStatePaletteUtil() {
     }
-
+    
     public static List<BlockState> decode(NbtList paletteTag) {
         int size = paletteTag.size();
         List<BlockState> list = new ArrayList<>(size);
@@ -41,7 +41,7 @@ public final class BlockStatePaletteUtil {
         }
         return list;
     }
-
+    
     private static <T extends Comparable<T>> BlockState with(BlockState state, Property<T> prop, String value) {
         return prop.parse(value).map(v -> state.with(prop, v)).orElse(state);
     }

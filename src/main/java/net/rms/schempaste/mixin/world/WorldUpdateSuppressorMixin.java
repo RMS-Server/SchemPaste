@@ -9,12 +9,12 @@ import org.spongepowered.asm.mixin.Unique;
 public abstract class WorldUpdateSuppressorMixin implements IWorldUpdateSuppressor {
     @Unique
     private boolean schempaste$preventUpdates;
-
+    
     @Override
     public boolean schempaste_shouldPreventUpdates() {
         return schempaste$preventUpdates;
     }
-
+    
     @Override
     public void schempaste_setPreventUpdates(boolean prevent) {
         this.schempaste$preventUpdates = prevent;

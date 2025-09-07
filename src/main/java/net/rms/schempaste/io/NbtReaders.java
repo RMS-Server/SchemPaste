@@ -25,16 +25,13 @@ public final class NbtReaders {
         }
 
 
-        try (InputStream base = new BufferedInputStream(Files.newInputStream(file));
-             LZMAInputStream lzma = new LZMAInputStream(base);
-             java.io.DataInputStream dis = new java.io.DataInputStream(lzma)) {
+        try (InputStream base = new BufferedInputStream(Files.newInputStream(file)); LZMAInputStream lzma = new LZMAInputStream(base); java.io.DataInputStream dis = new java.io.DataInputStream(lzma)) {
             return NbtIo.read(dis);
         } catch (EOFException e) {
             throw e;
         } catch (IOException e) {
 
-            try (InputStream raw = new BufferedInputStream(Files.newInputStream(file));
-                 java.io.DataInputStream dis = new java.io.DataInputStream(raw)) {
+            try (InputStream raw = new BufferedInputStream(Files.newInputStream(file)); java.io.DataInputStream dis = new java.io.DataInputStream(raw)) {
                 return NbtIo.read(dis);
             } catch (IOException suppressed) {
                 e.addSuppressed(suppressed);

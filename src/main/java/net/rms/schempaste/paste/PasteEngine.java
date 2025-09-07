@@ -127,8 +127,7 @@ public class PasteEngine {
 
     private int computeDynamicBudget() {
         int budgetMs = (cfg.mainThreadBudgetMs > 0 ? cfg.mainThreadBudgetMs : 40);
-        double est = Math.max(MIN_AVG_PER_BLOCK_MS,
-                Math.min(MAX_AVG_PER_BLOCK_MS, avgPerBlockMsEstimate));
+        double est = Math.max(MIN_AVG_PER_BLOCK_MS, Math.min(MAX_AVG_PER_BLOCK_MS, avgPerBlockMsEstimate));
         long tokens = (long) Math.floor(budgetMs / Math.max(1e-3, est));
         return (int) Math.max(1L, tokens);
     }
@@ -209,8 +208,7 @@ public class PasteEngine {
                         long nsGet = (tGet1 - tGet0);
                         ReplaceBehavior replace = (job != null) ? job.replaceBehavior : ReplaceBehavior.WITH_NON_AIR;
 
-                        if ((replace == ReplaceBehavior.NONE && !stateOld.isAir()) ||
-                                (replace == ReplaceBehavior.WITH_NON_AIR && task.state.isAir())) {
+                        if ((replace == ReplaceBehavior.NONE && !stateOld.isAir()) || (replace == ReplaceBehavior.WITH_NON_AIR && task.state.isAir())) {
 
                             if (job != null) {
                                 job.queuedBlocks.decrementAndGet();
@@ -373,15 +371,7 @@ public class PasteEngine {
             return new LayerRange(mode, axis, 0, 0, 0, Integer.MIN_VALUE, Integer.MAX_VALUE);
         }
 
-        return new LayerRange(
-                mode,
-                axis,
-                cfg.defaultLayerSingle,
-                cfg.defaultLayerAbove,
-                cfg.defaultLayerBelow,
-                cfg.defaultLayerRangeMin,
-                cfg.defaultLayerRangeMax
-        );
+        return new LayerRange(mode, axis, cfg.defaultLayerSingle, cfg.defaultLayerAbove, cfg.defaultLayerBelow, cfg.defaultLayerRangeMin, cfg.defaultLayerRangeMax);
     }
 
     private void updateProgress() {
@@ -397,8 +387,7 @@ public class PasteEngine {
                     int lastPct = job.lastProgressPercent.get();
                     if (progress >= Math.max(0, lastPct + 1)) {
                         for (var p : server.getPlayerManager().getPlayerList()) {
-                            p.sendMessage(net.minecraft.text.Text.of(
-                                    "Paste progress: " + progress + "% (" + placed + "/" + total + ")"), true);
+                            p.sendMessage(net.minecraft.text.Text.of("Paste progress: " + progress + "% (" + placed + "/" + total + ")"), true);
                         }
                         job.lastProgressPercent.set(progress);
                     }
@@ -450,19 +439,7 @@ public class PasteEngine {
             qSlowSamples.clear();
         }
 
-        StatusSnapshot snap = new StatusSnapshot(
-                jobs,
-                chunkManager.getLoadedChunkCount(),
-                SchemPaste.getTps(),
-                SchemPaste.getAverageMspt(),
-                SchemPaste.getLastTickMs(),
-                lastTickMsChunks,
-                lastTickMsQueue,
-                lastTickMsProgress,
-                lastTickMsTotal,
-                qMsGet, qMsClear, qMsSet, qMsTe, qAvgPerBlock,
-                qPlaced, qWithTe, qSkipped, qCleared, slow
-        );
+        StatusSnapshot snap = new StatusSnapshot(jobs, chunkManager.getLoadedChunkCount(), SchemPaste.getTps(), SchemPaste.getAverageMspt(), SchemPaste.getLastTickMs(), lastTickMsChunks, lastTickMsQueue, lastTickMsProgress, lastTickMsTotal, qMsGet, qMsClear, qMsSet, qMsTe, qAvgPerBlock, qPlaced, qWithTe, qSkipped, qCleared, slow);
 
         backgroundExecutor.execute(() -> logStatus(snap));
     }
@@ -482,17 +459,20 @@ public class PasteEngine {
         for (StatusJob j : s.jobs) {
             int pct = (j.total > 0) ? (j.placed * 100) / j.total : 0;
             if (!first) prog.append(", ");
-            prog.append("job ").append(j.idShort).append("=")
-                    .append(pct).append("%(").append(j.placed).append("/").append(j.total).append(")");
+            prog.append("job ")
+                .append(j.idShort)
+                .append("=")
+                .append(pct)
+                .append("%(")
+                .append(j.placed)
+                .append("/")
+                .append(j.total)
+                .append(")");
             first = false;
         }
         prog.append("]");
 
-        String queueDetail = String.format(
-                java.util.Locale.ROOT,
-                " queueDetail{get=%.1fms, clear=%.1fms, set=%.1fms, te=%.1fms; avgPerBlock=%.2fms; placed=%d, te=%d, skipped=%d, cleared=%d}",
-                s.qMsGet, s.qMsClear, s.qMsSet, s.qMsTe, s.qAvgPerBlock, s.qPlaced, s.qWithTe, s.qSkipped, s.qCleared
-        );
+        String queueDetail = String.format(java.util.Locale.ROOT, " queueDetail{get=%.1fms, clear=%.1fms, set=%.1fms, te=%.1fms; avgPerBlock=%.2fms; placed=%d, te=%d, skipped=%d, cleared=%d}", s.qMsGet, s.qMsClear, s.qMsSet, s.qMsTe, s.qAvgPerBlock, s.qPlaced, s.qWithTe, s.qSkipped, s.qCleared);
 
         String slowStr = "";
         if (s.slowSamples != null && !s.slowSamples.isEmpty()) {
@@ -541,8 +521,7 @@ public class PasteEngine {
             //         job.placedBlocks.get(), duration);
 
             for (var p : server.getPlayerManager().getPlayerList()) {
-                p.sendMessage(net.minecraft.text.Text.of(
-                        "Paste finished! Placed " + job.placedBlocks.get() + " blocks"), false);
+                p.sendMessage(net.minecraft.text.Text.of("Paste finished! Placed " + job.placedBlocks.get() + " blocks"), false);
             }
 
 
@@ -553,8 +532,7 @@ public class PasteEngine {
         enqueuePaste(file, placement, world, null, null);
     }
 
-    public void enqueuePaste(LitematicFile file, PlacementConfig.Placement placement, ServerWorld world,
-                             ReplaceBehavior replaceOverride, LayerRange layerRange) {
+    public void enqueuePaste(LitematicFile file, PlacementConfig.Placement placement, ServerWorld world, ReplaceBehavior replaceOverride, LayerRange layerRange) {
 
         String jobId = UUID.randomUUID().toString();
         String name = file.name != null && !file.name.isEmpty() ? file.name : placement.fileName;
@@ -595,8 +573,7 @@ public class PasteEngine {
         // SchemPaste.LOGGER.info("Started staged paste job [{}]: {}", jobId.substring(0, 8), name);
     }
 
-    private void processLitematicFileBackground(ServerWorld world, LitematicFile file, PlacementConfig.Placement placement,
-                                                ReplaceBehavior replace, LayerRange layerRange, PasteJob job) {
+    private void processLitematicFileBackground(ServerWorld world, LitematicFile file, PlacementConfig.Placement placement, ReplaceBehavior replace, LayerRange layerRange, PasteJob job) {
         // Abort early if job was cancelled
         if (job.cancelled.get() || cancelledJobs.contains(job.id)) {
             return;
@@ -629,19 +606,13 @@ public class PasteEngine {
                 BlockRotation rot = ov != null ? rotMain.rotate(ov.rotation) : rotMain;
                 BlockMirror mir = mirMain;
                 BlockMirror mirSub = ov != null ? ov.mirror : BlockMirror.NONE;
-                if (mirSub != BlockMirror.NONE &&
-                        (rotMain == BlockRotation.CLOCKWISE_90 || rotMain == BlockRotation.COUNTERCLOCKWISE_90)) {
+                if (mirSub != BlockMirror.NONE && (rotMain == BlockRotation.CLOCKWISE_90 || rotMain == BlockRotation.COUNTERCLOCKWISE_90)) {
                     mirSub = mirSub == BlockMirror.FRONT_BACK ? BlockMirror.LEFT_RIGHT : BlockMirror.FRONT_BACK;
                 }
 
-                BlockPos adjustedRelativePos = new BlockPos(
-                        region.relativePos.getX() + (size.getX() < 0 ? size.getX() + 1 : 0),
-                        region.relativePos.getY() + (size.getY() < 0 ? size.getY() + 1 : 0),
-                        region.relativePos.getZ() + (size.getZ() < 0 ? size.getZ() + 1 : 0)
-                );
+                BlockPos adjustedRelativePos = new BlockPos(region.relativePos.getX() + (size.getX() < 0 ? size.getX() + 1 : 0), region.relativePos.getY() + (size.getY() < 0 ? size.getY() + 1 : 0), region.relativePos.getZ() + (size.getZ() < 0 ? size.getZ() + 1 : 0));
 
-                BlockPos regionBase = ov != null ? ov.worldPos :
-                        origin.add(PositionUtils.getTransformedBlockPos(adjustedRelativePos, mir, rot));
+                BlockPos regionBase = ov != null ? ov.worldPos : origin.add(PositionUtils.getTransformedBlockPos(adjustedRelativePos, mir, rot));
 
 
                 BlockPos.Mutable local = new BlockPos.Mutable();
@@ -690,10 +661,7 @@ public class PasteEngine {
         // SchemPaste.LOGGER.info("Background scheduling completed [job={}]", job.id.substring(0, 8));
     }
 
-    private void processRegionBackground(ServerWorld world, String regionName, LitematicFile.Region region,
-                                         BlockPos origin, BlockRotation rotMain, BlockMirror mirMain,
-                                         RegionOverride regionOverride, ReplaceBehavior replace, LayerRange layerRange,
-                                         PasteJob job) {
+    private void processRegionBackground(ServerWorld world, String regionName, LitematicFile.Region region, BlockPos origin, BlockRotation rotMain, BlockMirror mirMain, RegionOverride regionOverride, ReplaceBehavior replace, LayerRange layerRange, PasteJob job) {
         // Check cancellation before heavy work
         if (job.cancelled.get() || cancelledJobs.contains(job.id)) {
             return;
@@ -707,20 +675,14 @@ public class PasteEngine {
 
 
         BlockMirror mirSub = regionOverride != null ? regionOverride.mirror : BlockMirror.NONE;
-        if (mirSub != BlockMirror.NONE &&
-                (rotMain == BlockRotation.CLOCKWISE_90 || rotMain == BlockRotation.COUNTERCLOCKWISE_90)) {
+        if (mirSub != BlockMirror.NONE && (rotMain == BlockRotation.CLOCKWISE_90 || rotMain == BlockRotation.COUNTERCLOCKWISE_90)) {
             mirSub = mirSub == BlockMirror.FRONT_BACK ? BlockMirror.LEFT_RIGHT : BlockMirror.FRONT_BACK;
         }
 
 
-        BlockPos adjustedRelativePos = new BlockPos(
-                region.relativePos.getX() + (size.getX() < 0 ? size.getX() + 1 : 0),
-                region.relativePos.getY() + (size.getY() < 0 ? size.getY() + 1 : 0),
-                region.relativePos.getZ() + (size.getZ() < 0 ? size.getZ() + 1 : 0)
-        );
+        BlockPos adjustedRelativePos = new BlockPos(region.relativePos.getX() + (size.getX() < 0 ? size.getX() + 1 : 0), region.relativePos.getY() + (size.getY() < 0 ? size.getY() + 1 : 0), region.relativePos.getZ() + (size.getZ() < 0 ? size.getZ() + 1 : 0));
 
-        BlockPos regionBase = regionOverride != null ? regionOverride.worldPos :
-                origin.add(PositionUtils.getTransformedBlockPos(adjustedRelativePos, mir, rot));
+        BlockPos regionBase = regionOverride != null ? regionOverride.worldPos : origin.add(PositionUtils.getTransformedBlockPos(adjustedRelativePos, mir, rot));
 
         BlockPos.Mutable posMutable = new BlockPos.Mutable();
 
@@ -733,9 +695,7 @@ public class PasteEngine {
 
         Set<ChunkPos> chunkSet = ChunkBoundsUtils.getIntersectingChunks(absSize, regionBase, rot, mirSub);
         java.util.List<ChunkPos> chunks = new java.util.ArrayList<>(chunkSet);
-        chunks.sort(java.util.Comparator
-                .comparingInt((ChunkPos c) -> c.z)
-                .thenComparingInt(c -> c.x));
+        chunks.sort(java.util.Comparator.comparingInt((ChunkPos c) -> c.z).thenComparingInt(c -> c.x));
 
 
         synchronized (job.chunkOrder) {
@@ -756,7 +716,8 @@ public class PasteEngine {
             for (int y = inter.minY; y <= inter.maxY; y++) {
                 for (int z = inter.minZ; z <= inter.maxZ; z++) {
                     for (int x = inter.minX; x <= inter.maxX; x++) {
-                        if (job.cancelled.get() || cancelledJobs.contains(job.id) || Thread.currentThread().isInterrupted()) {
+                        if (job.cancelled.get() || cancelledJobs.contains(job.id) || Thread.currentThread()
+                            .isInterrupted()) {
                             return;
                         }
                         BlockPos worldPos = new BlockPos(x, y, z);
@@ -793,19 +754,14 @@ public class PasteEngine {
                         NbtCompound teNBT = region.tileEntities.get(posMutable.toImmutable());
 
 
-                        if (state.hasBlockEntity() && state.isOf(Blocks.CHEST) &&
-                                mir != BlockMirror.NONE &&
-                                !(state.get(ChestBlock.CHEST_TYPE) == ChestType.SINGLE) &&
-                                cfg.fixChestMirror) {
+                        if (state.hasBlockEntity() && state.isOf(Blocks.CHEST) && mir != BlockMirror.NONE && !(state.get(ChestBlock.CHEST_TYPE) == ChestType.SINGLE) && cfg.fixChestMirror) {
 
                             Direction facing = state.get(ChestBlock.FACING);
                             Direction.Axis axis = facing.getAxis();
                             ChestType type = state.get(ChestBlock.CHEST_TYPE).getOpposite();
 
                             if (mir != BlockMirror.NONE && axis != Direction.Axis.Y) {
-                                Direction facingAdj = type == ChestType.LEFT ?
-                                        facing.rotateCounterclockwise(Direction.Axis.Y) :
-                                        facing.rotateClockwise(Direction.Axis.Y);
+                                Direction facingAdj = type == ChestType.LEFT ? facing.rotateCounterclockwise(Direction.Axis.Y) : facing.rotateClockwise(Direction.Axis.Y);
                                 BlockPos posAdj = new BlockPos(lx, ly, lz).offset(facingAdj);
                                 NbtCompound adjNBT = region.tileEntities.get(posAdj);
                                 if (adjNBT != null) {
@@ -902,11 +858,9 @@ public class PasteEngine {
         if (cfg.enableDynamicChunkLoading) {
             int max = chunkManager.getMaxLoadedChunks();
             if (max <= 0) {
-                return String.format("ChunkManager: loaded %d (unlimited)",
-                        chunkManager.getLoadedChunkCount());
+                return String.format("ChunkManager: loaded %d (unlimited)", chunkManager.getLoadedChunkCount());
             }
-            return String.format("ChunkManager: %d/%d loaded",
-                    chunkManager.getLoadedChunkCount(), max);
+            return String.format("ChunkManager: %d/%d loaded", chunkManager.getLoadedChunkCount(), max);
         }
         return "ChunkManager: disabled";
     }
@@ -977,10 +931,7 @@ public class PasteEngine {
         final int qPlaced, qWithTe, qSkipped, qCleared;
         final java.util.List<SlowSample> slowSamples;
 
-        StatusSnapshot(java.util.List<StatusJob> jobs, int chunksLoaded, double tps, double mspt,
-                       double serverTickMs, double msChunks, double msQueue, double msProgress, double msTotal,
-                       double qMsGet, double qMsClear, double qMsSet, double qMsTe, double qAvgPerBlock,
-                       int qPlaced, int qWithTe, int qSkipped, int qCleared, java.util.List<SlowSample> slowSamples) {
+        StatusSnapshot(java.util.List<StatusJob> jobs, int chunksLoaded, double tps, double mspt, double serverTickMs, double msChunks, double msQueue, double msProgress, double msTotal, double qMsGet, double qMsClear, double qMsSet, double qMsTe, double qAvgPerBlock, int qPlaced, int qWithTe, int qSkipped, int qCleared, java.util.List<SlowSample> slowSamples) {
             this.jobs = jobs;
             this.chunksLoaded = chunksLoaded;
             this.tps = tps;

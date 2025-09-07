@@ -10,29 +10,17 @@ public class PositionUtils {
 
 
     public static BlockPos getMinCorner(BlockPos pos1, BlockPos pos2) {
-        return new BlockPos(
-                Math.min(pos1.getX(), pos2.getX()),
-                Math.min(pos1.getY(), pos2.getY()),
-                Math.min(pos1.getZ(), pos2.getZ())
-        );
+        return new BlockPos(Math.min(pos1.getX(), pos2.getX()), Math.min(pos1.getY(), pos2.getY()), Math.min(pos1.getZ(), pos2.getZ()));
     }
 
 
     public static BlockPos getMaxCorner(BlockPos pos1, BlockPos pos2) {
-        return new BlockPos(
-                Math.max(pos1.getX(), pos2.getX()),
-                Math.max(pos1.getY(), pos2.getY()),
-                Math.max(pos1.getZ(), pos2.getZ())
-        );
+        return new BlockPos(Math.max(pos1.getX(), pos2.getX()), Math.max(pos1.getY(), pos2.getY()), Math.max(pos1.getZ(), pos2.getZ()));
     }
 
 
     public static Vec3i getRelativeEndPositionFromAreaSize(Vec3i areaSize) {
-        return new Vec3i(
-                areaSize.getX() - 1,
-                areaSize.getY() - 1,
-                areaSize.getZ() - 1
-        );
+        return new Vec3i(areaSize.getX() - 1, areaSize.getY() - 1, areaSize.getZ() - 1);
     }
 
 

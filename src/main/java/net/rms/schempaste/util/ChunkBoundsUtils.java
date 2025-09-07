@@ -12,8 +12,7 @@ import java.util.Set;
 public class ChunkBoundsUtils {
 
 
-    public static Set<ChunkPos> getIntersectingChunks(Vec3i regionSize, BlockPos origin,
-                                                      BlockRotation rotation, BlockMirror mirror) {
+    public static Set<ChunkPos> getIntersectingChunks(Vec3i regionSize, BlockPos origin, BlockRotation rotation, BlockMirror mirror) {
         Set<ChunkPos> chunks = new HashSet<>();
 
 
@@ -44,9 +43,7 @@ public class ChunkBoundsUtils {
     }
 
 
-    public static ChunkIntersection getChunkIntersection(Vec3i regionSize, BlockPos origin,
-                                                         BlockRotation rotation, BlockMirror mirror,
-                                                         ChunkPos chunkPos) {
+    public static ChunkIntersection getChunkIntersection(Vec3i regionSize, BlockPos origin, BlockRotation rotation, BlockMirror mirror, ChunkPos chunkPos) {
 
         BlockPos[] corners = getRegionCorners(regionSize, origin, rotation, mirror);
 
@@ -75,20 +72,11 @@ public class ChunkBoundsUtils {
             return null;
         }
 
-        return new ChunkIntersection(
-                intersectMinX, intersectMaxX,
-                regionMin.getY(), regionMax.getY(),
-                intersectMinZ, intersectMaxZ
-        );
+        return new ChunkIntersection(intersectMinX, intersectMaxX, regionMin.getY(), regionMax.getY(), intersectMinZ, intersectMaxZ);
     }
 
-    private static BlockPos[] getRegionCorners(Vec3i regionSize, BlockPos origin,
-                                               BlockRotation rotation, BlockMirror mirror) {
-        Vec3i absSize = new Vec3i(
-                Math.abs(regionSize.getX()),
-                Math.abs(regionSize.getY()),
-                Math.abs(regionSize.getZ())
-        );
+    private static BlockPos[] getRegionCorners(Vec3i regionSize, BlockPos origin, BlockRotation rotation, BlockMirror mirror) {
+        Vec3i absSize = new Vec3i(Math.abs(regionSize.getX()), Math.abs(regionSize.getY()), Math.abs(regionSize.getZ()));
 
         BlockPos[] corners = new BlockPos[8];
         corners[0] = new BlockPos(0, 0, 0);
@@ -121,9 +109,7 @@ public class ChunkBoundsUtils {
         }
 
         public boolean contains(BlockPos pos) {
-            return pos.getX() >= minX && pos.getX() <= maxX &&
-                    pos.getY() >= minY && pos.getY() <= maxY &&
-                    pos.getZ() >= minZ && pos.getZ() <= maxZ;
+            return pos.getX() >= minX && pos.getX() <= maxX && pos.getY() >= minY && pos.getY() <= maxY && pos.getZ() >= minZ && pos.getZ() <= maxZ;
         }
 
         public int getBlockCount() {
