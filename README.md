@@ -17,6 +17,14 @@ A Minecraft Fabric mod that helps you paste Litematica schematics on servers.
 > [!Note] 
 > This performance data only represents the mod's performance on the RMS Server and is for reference purposes only. It does not indicate the actual performance on your server.
 
+## Supported Versions
+
+- 1.17.1
+- 1.20.1
+
+> [!Tip]
+> If you need more supported versions, please raise an issue on Github or add my QQ (2628883576 (@qq.com, if you need to contact me via email), please indicate the purpose)
+
 ## Command Details
 
 ### Main Commands
@@ -142,11 +150,6 @@ All commands require OP permissions
     // Maximum loaded chunks
 }
 ```
-
-## Supported Versions
-
-- 1.17.1
-- 1.20.1
 
 ## Installation
 
