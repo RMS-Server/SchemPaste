@@ -10,6 +10,13 @@
 [![Fabric API](https://img.shields.io/badge/Fabric%20API-Required-orange?style=flat-square&logo=fabricmc&logoColor=white)](https://github.com/FabricMC/fabric)
 [![Syncmatica](https://img.shields.io/badge/Syncmatica-Required-blue?style=flat-square&logo=minecraft&logoColor=white)](https://github.com/End-Tech/syncmatica)
 
+## 针对大型原理图的优化
+
+- 经过在RMS中的实测，在RMS Intel i7-14600k CPU的配置上，粘贴一个方块数1000w，体积2亿的原理图，耗时9min46s（平均2w/s），全程tps稳定无掉刻
+
+> [!Note] 
+> 此效率仅代表该mod在RMS Server上的表现，仅做参考作用，不代表在您的服务器上的实际表现
+
 ## 命令详解
 
 ### 主命令
