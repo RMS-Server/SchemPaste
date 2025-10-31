@@ -12,7 +12,7 @@ A Minecraft Fabric mod that helps you paste Litematica schematics on servers.
 
 ## Optimization for large schematics
 
-- After testing in RMS Server with Intel i7-14600k CPU, pasting a schematic with 10 million blocks and a volume of 200 million blocks took 9 minutes and 46 seconds (averaging 20,000 blocks per second), with TPS remaining stable and no drops.
+- After testing in RMS Server with Intel i5-14600k CPU, pasting a schematic with 10 million blocks and a volume of 200 million blocks took 9 minutes and 46 seconds (averaging 20,000 blocks per second), with TPS remaining stable and no drops.
 
 > [!Note] 
 > This performance data only represents the mod's performance on the RMS Server and is for reference purposes only. It does not indicate the actual performance on your server.
