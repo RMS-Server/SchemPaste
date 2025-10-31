@@ -1,11 +1,14 @@
 package net.rms.schempaste.paste;
 
+import net.minecraft.block.AbstractRailBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.ChestBlock;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.enums.ChestType;
+import net.minecraft.fluid.Fluid;
+import net.minecraft.fluid.Fluids;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.inventory.Inventory;
@@ -18,7 +21,12 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.BlockMirror;
 import net.minecraft.util.BlockRotation;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.*;
+//#if MC < 12000
+//#else
+//$$ import net.minecraft.world.tick.OrderedTick;
+//#endif
 import net.minecraft.world.World;
 import net.rms.schempaste.SchemPaste;
 import net.rms.schempaste.config.PlacementConfig;
@@ -245,9 +253,9 @@ public class PasteEngine {
                     if (stateOld.hasBlockEntity() && (!task.state.hasBlockEntity() || task.tileEntity != null)) {
                         long tC0 = System.nanoTime();
                         //#if MC < 12000
-                        int flags = Block.NOTIFY_LISTENERS | Block.FORCE_STATE | Block.SKIP_DROPS | Block.SKIP_LIGHTING_UPDATES;
+                        int flags = Block.NOTIFY_LISTENERS | Block.NOTIFY_NEIGHBORS | Block.FORCE_STATE | Block.SKIP_DROPS | Block.SKIP_LIGHTING_UPDATES;
                         //#else
-                        //$$ int flags = net.minecraft.block.Block.NOTIFY_LISTENERS | net.minecraft.block.Block.FORCE_STATE | net.minecraft.block.Block.SKIP_DROPS;
+                        //$$ int flags = net.minecraft.block.Block.NOTIFY_LISTENERS | net.minecraft.block.Block.NOTIFY_NEIGHBORS | net.minecraft.block.Block.FORCE_STATE | net.minecraft.block.Block.SKIP_DROPS;
                         //#endif
                         world.setBlockState(task.pos, Blocks.BARRIER.getDefaultState(), flags);
                         long tC1 = System.nanoTime();
@@ -258,9 +266,9 @@ public class PasteEngine {
 
                     long tS0 = System.nanoTime();
                     //#if MC < 12000
-                    int flagsPlace = Block.NOTIFY_LISTENERS | Block.FORCE_STATE | Block.SKIP_DROPS | Block.SKIP_LIGHTING_UPDATES;
+                    int flagsPlace = Block.NOTIFY_LISTENERS | Block.NOTIFY_NEIGHBORS | Block.FORCE_STATE | Block.SKIP_DROPS | Block.SKIP_LIGHTING_UPDATES;
                     //#else
-                    //$$ int flagsPlace = net.minecraft.block.Block.NOTIFY_LISTENERS | net.minecraft.block.Block.FORCE_STATE | net.minecraft.block.Block.SKIP_DROPS;
+                    //$$ int flagsPlace = net.minecraft.block.Block.NOTIFY_LISTENERS | net.minecraft.block.Block.NOTIFY_NEIGHBORS | net.minecraft.block.Block.FORCE_STATE | net.minecraft.block.Block.SKIP_DROPS;
                     //#endif
                     boolean placedOk = world.setBlockState(task.pos, task.state, flagsPlace);
                     long tS1 = System.nanoTime();
@@ -585,6 +593,12 @@ public class PasteEngine {
 
     private void completeJob(PasteJob job) {
         if (job.isCompleted.compareAndSet(false, true)) {
+            ServerWorld world = server.getWorld(World.OVERWORLD);
+            if (world != null) {
+                runPostPlacementUpdates(world, job);
+            } else {
+                job.clearPostPlacementData();
+            }
             activeJobs.remove(job.id);
             long duration = System.currentTimeMillis() - job.startTime;
 
@@ -603,6 +617,122 @@ public class PasteEngine {
             }
 
 
+        }
+    }
+
+    private void runPostPlacementUpdates(ServerWorld world, PasteJob job) {
+        if (cfg.suppressNeighborUpdates) {
+            try {
+                net.rms.schempaste.util.WorldUtils.setShouldPreventBlockUpdates(world, false);
+            } catch (Throwable ignored) {
+            }
+        }
+
+        java.util.Collection<PendingUpdateVolume> volumes = job.getPendingVolumes();
+        if (!volumes.isEmpty()) {
+            BlockPos.Mutable mutable = new BlockPos.Mutable();
+            for (PendingUpdateVolume volume : volumes) {
+                for (int y = volume.minY; y <= volume.maxY; y++) {
+                    for (int x = volume.minX; x <= volume.maxX; x++) {
+                        for (int z = volume.minZ; z <= volume.maxZ; z++) {
+                            mutable.set(x, y, z);
+                            BlockState state = world.getBlockState(mutable);
+                            if (state.isAir()) {
+                                continue;
+                            }
+                            try {
+                                world.updateNeighborsAlways(mutable, state.getBlock());
+                            } catch (Throwable updateError) {
+                                SchemPaste.LOGGER.warn("Failed to update neighbors for {} @ {}", state, mutable, updateError);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        schedulePendingTicks(world, job);
+        restoreRailStates(world, job);
+        job.clearPostPlacementData();
+    }
+
+    private void schedulePendingTicks(ServerWorld world, PasteJob job) {
+        PendingTick tick;
+        while ((tick = job.pendingTicks.poll()) != null) {
+            Identifier identifier;
+            try {
+                identifier = new Identifier(tick.id);
+            } catch (Exception e) {
+                SchemPaste.LOGGER.warn("Skipping invalid tick id '{}'", tick.id, e);
+                continue;
+            }
+            int delay = Math.max(1, tick.delay);
+            if (tick.isBlock) {
+                //#if MC < 12000
+                Block block = net.minecraft.util.registry.Registry.BLOCK.get(identifier);
+                //#else
+                //$$ Block block = net.minecraft.registry.Registries.BLOCK.get(identifier);
+                //#endif
+                if (block == Blocks.AIR) {
+                    continue;
+                }
+                try {
+                    //#if MC < 12000
+                    world.getBlockTickScheduler().schedule(tick.pos, block, delay);
+                    //#else
+                    //$$ long trigger = world.getTime() + delay;
+                    //$$ world.getBlockTickScheduler().scheduleTick(new OrderedTick<>(block, tick.pos, trigger, 0L));
+                    //#endif
+                } catch (Exception scheduleError) {
+                    SchemPaste.LOGGER.warn("Failed to schedule block tick for {} @ {}", block, tick.pos, scheduleError);
+                }
+            } else {
+                //#if MC < 12000
+                Fluid fluid = net.minecraft.util.registry.Registry.FLUID.get(identifier);
+                //#else
+                //$$ Fluid fluid = net.minecraft.registry.Registries.FLUID.get(identifier);
+                //#endif
+                if (fluid == Fluids.EMPTY) {
+                    continue;
+                }
+                try {
+                    //#if MC < 12000
+                    world.getFluidTickScheduler().schedule(tick.pos, fluid, delay);
+                    //#else
+                    //$$ long trigger = world.getTime() + delay;
+                    //$$ world.getFluidTickScheduler().scheduleTick(new OrderedTick<>(fluid, tick.pos, trigger, 0L));
+                    //#endif
+                } catch (Exception scheduleError) {
+                    SchemPaste.LOGGER.warn("Failed to schedule fluid tick for {} @ {}", fluid, tick.pos, scheduleError);
+                }
+            }
+        }
+    }
+
+    private void restoreRailStates(ServerWorld world, PasteJob job) {
+        if (job.desiredStates.isEmpty()) {
+            return;
+        }
+        //#if MC < 12000
+        int flags = Block.NOTIFY_LISTENERS | Block.FORCE_STATE | Block.SKIP_DROPS | Block.SKIP_LIGHTING_UPDATES;
+        //#else
+        //$$ int flags = net.minecraft.block.Block.NOTIFY_LISTENERS | net.minecraft.block.Block.FORCE_STATE | net.minecraft.block.Block.SKIP_DROPS;
+        //#endif
+        for (Map.Entry<Long, BlockState> entry : job.desiredStates.entrySet()) {
+            BlockPos pos = BlockPos.fromLong(entry.getKey());
+            BlockState desired = entry.getValue();
+            if (!(desired.getBlock() instanceof AbstractRailBlock)) {
+                continue;
+            }
+            BlockState current = world.getBlockState(pos);
+            if (current.equals(desired)) {
+                continue;
+            }
+            try {
+                world.setBlockState(pos, desired, flags);
+            } catch (Exception e) {
+                SchemPaste.LOGGER.warn("Failed to restore rail state for {} @ {}", desired, pos, e);
+            }
         }
     }
 
@@ -790,6 +920,7 @@ public class PasteEngine {
             }
             var inter = ChunkBoundsUtils.getChunkIntersection(absSize, regionBase, rot, mirSub, cpos);
             if (inter == null) continue;
+            job.recordVolume(cpos, inter);
 
             for (int y = inter.minY; y <= inter.maxY; y++) {
                 for (int z = inter.minZ; z <= inter.maxZ; z++) {
@@ -876,6 +1007,7 @@ public class PasteEngine {
 
 
                         ChunkPos taskChunk = cpos;
+                        job.recordDesiredState(worldPos, state);
                         mainThreadQueue.offer(new BlockPlacementTask(worldPos, taskChunk, state, teNBT, job.id));
                         job.queuedBlocks.incrementAndGet();
 
@@ -888,6 +1020,8 @@ public class PasteEngine {
                 }
             }
         }
+
+        enqueuePendingTicks(region, regionBase, rot, mirSub, layerRange, job);
 
         if (region.entities != null && !region.entities.isEmpty()) {
             java.util.List<EntityPlacementTask> entityTasks = new java.util.ArrayList<>();
@@ -959,6 +1093,42 @@ public class PasteEngine {
         }
     }
 
+    private void enqueuePendingTicks(LitematicFile.Region region, BlockPos regionBase, BlockRotation rot, BlockMirror mirSub, LayerRange layerRange, PasteJob job) {
+        if (((region.blockTicks == null || region.blockTicks.isEmpty()) && (region.fluidTicks == null || region.fluidTicks.isEmpty())) || job.cancelled.get() || cancelledJobs.contains(job.id)) {
+            return;
+        }
+
+        if (region.blockTicks != null) {
+            for (LitematicFile.TickEntry tick : region.blockTicks) {
+                if (job.cancelled.get() || cancelledJobs.contains(job.id)) {
+                    return;
+                }
+                BlockPos local = new BlockPos(tick.x, tick.y, tick.z);
+                BlockPos transformed = PositionUtils.getTransformedBlockPos(local, mirSub, rot);
+                BlockPos worldPos = regionBase.add(transformed);
+                if (!shouldPasteBlock(worldPos, layerRange)) {
+                    continue;
+                }
+                job.addPendingTick(worldPos, tick.id, tick.delay, true);
+            }
+        }
+
+        if (region.fluidTicks != null) {
+            for (LitematicFile.TickEntry tick : region.fluidTicks) {
+                if (job.cancelled.get() || cancelledJobs.contains(job.id)) {
+                    return;
+                }
+                BlockPos local = new BlockPos(tick.x, tick.y, tick.z);
+                BlockPos transformed = PositionUtils.getTransformedBlockPos(local, mirSub, rot);
+                BlockPos worldPos = regionBase.add(transformed);
+                if (!shouldPasteBlock(worldPos, layerRange)) {
+                    continue;
+                }
+                job.addPendingTick(worldPos, tick.id, tick.delay, false);
+            }
+        }
+    }
+
     private void decrementGlobalChunkCount(ChunkPos chunk) {
         if (!cfg.enableDynamicChunkLoading || chunk == null) return;
         long key = ChunkPos.toLong(chunk.x, chunk.z);
@@ -1006,7 +1176,7 @@ public class PasteEngine {
         nbt.remove("UUIDMost");
         nbt.remove("UUIDLeast");
 
-        BlockPos floored = new BlockPos(worldPos.x, worldPos.y, worldPos.z);
+        BlockPos floored = new BlockPos(MathHelper.floor(worldPos.x), MathHelper.floor(worldPos.y), MathHelper.floor(worldPos.z));
         ChunkPos chunkPos = new ChunkPos(floored);
         return new EntityPlacementTask(chunkPos, nbt, jobId);
     }
@@ -1315,6 +1485,9 @@ public class PasteEngine {
         final AtomicInteger lastProgressPercent = new AtomicInteger(-1);
         final java.util.List<ChunkPos> chunkOrder = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
         final java.util.concurrent.ConcurrentLinkedQueue<ChunkPos> sequentialUnloadQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
+        final ConcurrentHashMap<Long, PendingUpdateVolume> pendingVolumes = new ConcurrentHashMap<>();
+        final java.util.concurrent.ConcurrentLinkedQueue<PendingTick> pendingTicks = new java.util.concurrent.ConcurrentLinkedQueue<>();
+        final ConcurrentHashMap<Long, BlockState> desiredStates = new ConcurrentHashMap<>();
         final AtomicBoolean pausedByCap = new AtomicBoolean(false);
         final java.util.concurrent.atomic.AtomicLong lastStatusLogMs = new java.util.concurrent.atomic.AtomicLong(0L);
         long lastProgressTime;
@@ -1324,6 +1497,82 @@ public class PasteEngine {
             this.id = id;
             this.startTime = System.currentTimeMillis();
             this.lastProgressTime = startTime;
+        }
+
+        void recordVolume(ChunkPos chunkPos, ChunkBoundsUtils.ChunkIntersection intersection) {
+            long key = ChunkPos.toLong(chunkPos.x, chunkPos.z);
+            pendingVolumes.compute(key, (k, existing) -> {
+                if (existing == null) {
+                    return new PendingUpdateVolume(intersection.minX, intersection.maxX, intersection.minY, intersection.maxY, intersection.minZ, intersection.maxZ);
+                }
+                existing.expand(intersection.minX, intersection.maxX, intersection.minY, intersection.maxY, intersection.minZ, intersection.maxZ);
+                return existing;
+            });
+        }
+
+        void addPendingTick(BlockPos pos, String id, int delay, boolean isBlock) {
+            if (id == null || id.isEmpty()) {
+                return;
+            }
+            pendingTicks.add(new PendingTick(pos.toImmutable(), id, delay, isBlock));
+        }
+
+        java.util.Collection<PendingUpdateVolume> getPendingVolumes() {
+            return pendingVolumes.values();
+        }
+
+        void recordDesiredState(BlockPos pos, BlockState state) {
+            if (state == null || !(state.getBlock() instanceof AbstractRailBlock)) {
+                return;
+            }
+            desiredStates.put(pos.asLong(), state);
+        }
+
+        void clearPostPlacementData() {
+            pendingVolumes.clear();
+            pendingTicks.clear();
+            desiredStates.clear();
+        }
+    }
+
+    private static final class PendingUpdateVolume {
+        int minX;
+        int maxX;
+        int minY;
+        int maxY;
+        int minZ;
+        int maxZ;
+
+        PendingUpdateVolume(int minX, int maxX, int minY, int maxY, int minZ, int maxZ) {
+            this.minX = minX;
+            this.maxX = maxX;
+            this.minY = minY;
+            this.maxY = maxY;
+            this.minZ = minZ;
+            this.maxZ = maxZ;
+        }
+
+        void expand(int minX, int maxX, int minY, int maxY, int minZ, int maxZ) {
+            if (minX < this.minX) this.minX = minX;
+            if (maxX > this.maxX) this.maxX = maxX;
+            if (minY < this.minY) this.minY = minY;
+            if (maxY > this.maxY) this.maxY = maxY;
+            if (minZ < this.minZ) this.minZ = minZ;
+            if (maxZ > this.maxZ) this.maxZ = maxZ;
+        }
+    }
+
+    private static final class PendingTick {
+        final BlockPos pos;
+        final String id;
+        final int delay;
+        final boolean isBlock;
+
+        PendingTick(BlockPos pos, String id, int delay, boolean isBlock) {
+            this.pos = pos;
+            this.id = id;
+            this.delay = delay;
+            this.isBlock = isBlock;
         }
     }
 

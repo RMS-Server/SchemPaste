@@ -4,7 +4,9 @@
   "refmap": "${id}.refmap.json",
   "compatibilityLevel": "JAVA_${java_version}",
   "mixins": [
-    "world.WorldUpdateSuppressorMixin"
+    "world.WorldUpdateSuppressorMixin",
+    "world.ServerTickSchedulerMixin",
+    "world.WorldAccessSchedulerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

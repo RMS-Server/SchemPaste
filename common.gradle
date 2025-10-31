@@ -1,3 +1,6 @@
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.jvm.toolchain.JavaToolchainService
+
 apply plugin: 'fabric-loom'
 apply plugin: 'com.replaymod.preprocess'
 
@@ -52,6 +55,17 @@ def javaVersionNumber = (
             (javaCompatibility == JavaVersion.VERSION_17 ? '17' : '21'))
 )
 
+def toolchainLanguageVersionNumber = (
+    javaCompatibility == JavaVersion.VERSION_1_8 ? '8' :
+        (javaCompatibility == JavaVersion.VERSION_16 ? '17' :
+            (javaCompatibility == JavaVersion.VERSION_17 ? '17' : '21'))
+)
+def toolchainLanguageVersion = JavaLanguageVersion.of(Integer.parseInt(toolchainLanguageVersionNumber))
+def javaToolchainService = project.extensions.getByType(JavaToolchainService)
+def toolchainLauncherProvider = javaToolchainService.launcherFor {
+    languageVersion = toolchainLanguageVersion
+}
+
 processResources {
     filesMatching('fabric.mod.json') {
         expand id: id,
@@ -69,8 +83,17 @@ processResources {
 java {
     sourceCompatibility = javaCompatibility
     targetCompatibility = javaCompatibility
+    toolchain {
+        languageVersion = toolchainLanguageVersion
+    }
 }
 
 jar {
     from '../../LICENSE'
+}
+
+tasks.withType(JavaExec).configureEach {
+    if (executable == null) {
+        javaLauncher.set(toolchainLauncherProvider)
+    }
 }
