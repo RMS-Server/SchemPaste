@@ -34,7 +34,10 @@ loom {
             property("mixin.debug.export", "true")
             ideConfigGenerated true
         }
-        remove client
+        client {
+            property("mixin.debug.export", "true")
+            ideConfigGenerated true
+        }
     }
 }
 
