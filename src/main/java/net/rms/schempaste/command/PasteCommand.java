@@ -7,6 +7,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.Util;
 import net.rms.schempaste.SchemPaste;
 import net.rms.schempaste.config.PlacementConfig;
@@ -260,13 +261,37 @@ public class PasteCommand {
     }
 
     private static net.minecraft.server.world.ServerWorld dimToWorld(net.minecraft.server.MinecraftServer server, String dim) {
-        if (dim == null) return server.getOverworld();
-        switch (dim) {
+        if (dim == null || dim.isEmpty()) {
+            return server.getOverworld();
+        }
+        String raw = dim.trim();
+        String lower = raw.toLowerCase(java.util.Locale.ROOT);
+        String withNamespace = lower.contains(":") ? lower : "minecraft:" + lower;
+
+        for (net.minecraft.server.world.ServerWorld world : server.getWorlds()) {
+            if (world == null) {
+                continue;
+            }
+            Identifier key = world.getRegistryKey().getValue();
+            String idStr = key.toString().toLowerCase(java.util.Locale.ROOT);
+            if (idStr.equals(lower) || idStr.equals(withNamespace)) {
+                return world;
+            }
+        }
+
+        // Fallback for legacy names without namespace or custom typos
+        switch (lower) {
+            case "the_nether":
+            case "nether":
             case "minecraft:the_nether":
                 return server.getWorld(net.minecraft.world.World.NETHER);
+            case "the_end":
+            case "end":
             case "minecraft:the_end":
                 return server.getWorld(net.minecraft.world.World.END);
+            case "overworld":
             case "minecraft:overworld":
+                return server.getWorld(net.minecraft.world.World.OVERWORLD);
             default:
                 return server.getWorld(net.minecraft.world.World.OVERWORLD);
         }

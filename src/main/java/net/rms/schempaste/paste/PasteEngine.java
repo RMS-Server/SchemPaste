@@ -23,6 +23,7 @@ import net.minecraft.util.BlockMirror;
 import net.minecraft.util.BlockRotation;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.*;
+import net.minecraft.util.registry.RegistryKey;
 //#if MC < 12000
 //#else
 //$$ import net.minecraft.world.tick.OrderedTick;
@@ -57,11 +58,11 @@ public class PasteEngine {
     private final ExecutorService backgroundExecutor;
     private final Queue<BlockPlacementTask> mainThreadQueue = new ConcurrentLinkedQueue<>();
     private final Map<String, PasteJob> activeJobs = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<Long, AtomicInteger> chunkQueueCounts = new ConcurrentHashMap<>();
-    private final DynamicChunkManager chunkManager;
+    private final ConcurrentHashMap<ChunkKey, AtomicInteger> chunkQueueCounts = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<RegistryKey<World>, DynamicChunkManager> chunkManagers = new ConcurrentHashMap<>();
     private final EnqueueRateLimiter enqueueLimiter = new EnqueueRateLimiter();
     private final AtomicInteger globalQueuedTasks = new AtomicInteger(0);
-    private final ConcurrentHashMap<Long, String> chunkOwnerJob = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ChunkKey, String> chunkOwnerJob = new ConcurrentHashMap<>();
     private final java.util.Set<String> cancelledJobs = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final java.util.concurrent.atomic.AtomicLong lastStatusLogMs = new java.util.concurrent.atomic.AtomicLong(0L);
     private final java.util.concurrent.atomic.AtomicLong qNsGetState = new java.util.concurrent.atomic.AtomicLong(0L);
@@ -89,7 +90,13 @@ public class PasteEngine {
             t.setDaemon(true);
             return t;
         });
-        this.chunkManager = new DynamicChunkManager(server.getWorld(World.OVERWORLD), cfg);
+    }
+
+    private DynamicChunkManager getChunkManager(ServerWorld world) {
+        if (world == null) {
+            return null;
+        }
+        return chunkManagers.computeIfAbsent(world.getRegistryKey(), key -> new DynamicChunkManager(world, cfg));
     }
 
     private static BlockRotation toRotation(PlacementConfig.Rotation r) {
@@ -124,7 +131,9 @@ public class PasteEngine {
 
         final long t0 = System.nanoTime();
         final long a0 = System.nanoTime();
-        chunkManager.tick();
+        for (DynamicChunkManager manager : chunkManagers.values()) {
+            manager.tick();
+        }
         final long a1 = System.nanoTime();
         processMainThreadQueue();
         final long a2 = System.nanoTime();
@@ -154,184 +163,191 @@ public class PasteEngine {
         final long budgetNanos = (long) ((cfg.mainThreadBudgetMs > 0 ? cfg.mainThreadBudgetMs : 40)) * 1_000_000L;
 
 
-        ServerWorld worldTop = server.getWorld(World.OVERWORLD);
-        boolean suppressed = false;
-        if (cfg.suppressNeighborUpdates && worldTop != null) {
-            try {
-                net.rms.schempaste.util.WorldUtils.setShouldPreventBlockUpdates(worldTop, true);
-                suppressed = true;
-            } catch (Throwable t) {
-            }
-        }
-
-        try {
-            processed = processBlockTasks(processed, maxPerTick, start, budgetNanos);
-            if ((System.nanoTime() - start) < budgetNanos && processed < maxPerTick) {
-                processed = processEntityTasks(processed, maxPerTick, start, budgetNanos);
-            }
-        } finally {
-            if (suppressed) {
-                try {
-                    net.rms.schempaste.util.WorldUtils.setShouldPreventBlockUpdates(worldTop, false);
-                } catch (Throwable t) {
-                }
-            }
+        processed = processBlockTasks(processed, maxPerTick, start, budgetNanos);
+        if ((System.nanoTime() - start) < budgetNanos && processed < maxPerTick) {
+            processed = processEntityTasks(processed, maxPerTick, start, budgetNanos);
         }
     }
 
     private int processBlockTasks(int processed, int maxPerTick, long start, long budgetNanos) {
         while (processed < maxPerTick) {
             BlockPlacementTask task = mainThreadQueue.poll();
-            if (task == null) break;
+            if (task == null) {
+                break;
+            }
 
+            PasteJob job = activeJobs.get(task.jobId);
+            RegistryKey<World> worldKey = job != null ? job.worldKey : task.worldKey;
+
+            if (job == null || job.cancelled.get() || cancelledJobs.contains(task.jobId)) {
+                if (job != null) {
+                    job.queuedBlocks.decrementAndGet();
+                }
+                decrementGlobalChunkCount(worldKey, task.chunkPos);
+                globalQueuedTasks.decrementAndGet();
+                qCountSkipped.incrementAndGet();
+                processed++;
+                if ((System.nanoTime() - start) >= budgetNanos) {
+                    break;
+                }
+                continue;
+            }
+
+            ServerWorld world = server.getWorld(worldKey);
+            if (world == null) {
+                job.queuedBlocks.decrementAndGet();
+                decrementGlobalChunkCount(worldKey, task.chunkPos);
+                globalQueuedTasks.decrementAndGet();
+                qCountSkipped.incrementAndGet();
+                processed++;
+                if ((System.nanoTime() - start) >= budgetNanos) {
+                    break;
+                }
+                continue;
+            }
+
+            DynamicChunkManager chunkManager = getChunkManager(world);
+            if (chunkManager == null) {
+                mainThreadQueue.offer(task);
+                processed++;
+                if ((System.nanoTime() - start) >= budgetNanos) {
+                    break;
+                }
+                continue;
+            }
+
+            boolean suppressed = false;
             try {
-                ServerWorld world = server.getWorld(World.OVERWORLD);
-                if (world != null) {
-
-                    ChunkPos chunkPos = new ChunkPos(task.pos);
-                    PasteJob job = activeJobs.get(task.jobId);
-
-                    if (job == null || job.cancelled.get() || cancelledJobs.contains(task.jobId)) {
-                        if (job != null) {
-                            job.queuedBlocks.decrementAndGet();
-                        }
-                        decrementGlobalChunkCount(task.chunkPos);
-                        globalQueuedTasks.decrementAndGet();
-                        qCountSkipped.incrementAndGet();
-                        processed++;
-                        if ((System.nanoTime() - start) >= budgetNanos) {
-                            break;
-                        }
-                        continue;
+                if (cfg.suppressNeighborUpdates) {
+                    try {
+                        net.rms.schempaste.util.WorldUtils.setShouldPreventBlockUpdates(world, true);
+                        suppressed = true;
+                    } catch (Throwable ignored) {
                     }
-                    if (!chunkManager.ensureChunkLoaded(chunkPos)) {
+                }
 
-                        mainThreadQueue.offer(task);
-                        if (cfg.enableDynamicChunkLoading && cfg.maxLoadedChunks > 0) {
-                            if (job.pausedByCap.compareAndSet(false, true)) {
-                                long now = System.currentTimeMillis();
-                                long last = job.lastStatusLogMs.get();
-                                if (now - last >= 3000 && job.lastStatusLogMs.compareAndSet(last, now)) {
-                                    // pause notice (suppressed)
-                                }
+                boolean ready = chunkManager.ensureChunkLoaded(task.chunkPos);
+                if (!ready) {
+                    mainThreadQueue.offer(task);
+                    if (cfg.enableDynamicChunkLoading && cfg.maxLoadedChunks > 0) {
+                        if (job.pausedByCap.compareAndSet(false, true)) {
+                            long now = System.currentTimeMillis();
+                            long last = job.lastStatusLogMs.get();
+                            if (now - last >= 3000 && job.lastStatusLogMs.compareAndSet(last, now)) {
+                                // pause notice suppressed
                             }
                         }
+                    }
+                    break;
+                }
+
+                if (job.pausedByCap.compareAndSet(true, false)) {
+                    long now = System.currentTimeMillis();
+                    long last = job.lastStatusLogMs.get();
+                    if (now - last >= 3000 && job.lastStatusLogMs.compareAndSet(last, now)) {
+                        // resume notice suppressed
+                    }
+                }
+
+                long tGet0 = System.nanoTime();
+                BlockState stateOld = world.getBlockState(task.pos);
+                long tGet1 = System.nanoTime();
+                long nsGet = tGet1 - tGet0;
+                ReplaceBehavior replace = job.replaceBehavior;
+
+                if ((replace == ReplaceBehavior.NONE && !stateOld.isAir()) || (replace == ReplaceBehavior.WITH_NON_AIR && task.state.isAir())) {
+                    job.queuedBlocks.decrementAndGet();
+                    decrementGlobalChunkCount(worldKey, task.chunkPos);
+                    globalQueuedTasks.decrementAndGet();
+                    qCountSkipped.incrementAndGet();
+                    qNsGetState.addAndGet(nsGet);
+                    processed++;
+                    if ((System.nanoTime() - start) >= budgetNanos) {
                         break;
                     }
-                    if (job.pausedByCap.compareAndSet(true, false)) {
-                        long now = System.currentTimeMillis();
-                        long last = job.lastStatusLogMs.get();
-                        if (now - last >= 3000 && job.lastStatusLogMs.compareAndSet(last, now)) {
-                            // resume notice (suppressed)
-                        }
-                    }
-
-
-                    long tGet0 = System.nanoTime();
-                    BlockState stateOld = world.getBlockState(task.pos);
-                    long tGet1 = System.nanoTime();
-                    long nsGet = (tGet1 - tGet0);
-                    ReplaceBehavior replace = job.replaceBehavior;
-
-                    if ((replace == ReplaceBehavior.NONE && !stateOld.isAir()) || (replace == ReplaceBehavior.WITH_NON_AIR && task.state.isAir())) {
-
-                        job.queuedBlocks.decrementAndGet();
-                        decrementGlobalChunkCount(task.chunkPos);
-                        globalQueuedTasks.decrementAndGet();
-                        qCountSkipped.incrementAndGet();
-                        qNsGetState.addAndGet(nsGet);
-                        processed++;
-
-                        if ((System.nanoTime() - start) >= budgetNanos) {
-                            break;
-                        }
-                        continue;
-                    }
-
-
-                    long nsClear = 0L;
-                    if (stateOld.hasBlockEntity() && (!task.state.hasBlockEntity() || task.tileEntity != null)) {
-                        long tC0 = System.nanoTime();
-                        //#if MC < 12000
-                        int flags = Block.NOTIFY_LISTENERS | Block.NOTIFY_NEIGHBORS | Block.FORCE_STATE | Block.SKIP_DROPS | Block.SKIP_LIGHTING_UPDATES;
-                        //#else
-                        //$$ int flags = net.minecraft.block.Block.NOTIFY_LISTENERS | net.minecraft.block.Block.NOTIFY_NEIGHBORS | net.minecraft.block.Block.FORCE_STATE | net.minecraft.block.Block.SKIP_DROPS;
-                        //#endif
-                        world.setBlockState(task.pos, Blocks.BARRIER.getDefaultState(), flags);
-                        long tC1 = System.nanoTime();
-                        nsClear = (tC1 - tC0);
-                        qCountClearedTe.incrementAndGet();
-                    }
-
-
-                    long tS0 = System.nanoTime();
-                    //#if MC < 12000
-                    int flagsPlace = Block.NOTIFY_LISTENERS | Block.NOTIFY_NEIGHBORS | Block.FORCE_STATE | Block.SKIP_DROPS | Block.SKIP_LIGHTING_UPDATES;
-                    //#else
-                    //$$ int flagsPlace = net.minecraft.block.Block.NOTIFY_LISTENERS | net.minecraft.block.Block.NOTIFY_NEIGHBORS | net.minecraft.block.Block.FORCE_STATE | net.minecraft.block.Block.SKIP_DROPS;
-                    //#endif
-                    boolean placedOk = world.setBlockState(task.pos, task.state, flagsPlace);
-                    long tS1 = System.nanoTime();
-                    long nsSet = (tS1 - tS0);
-                    if (placedOk) {
-
-                        long nsTe = 0L;
-                        if (task.tileEntity != null) {
-                            BlockEntity te = world.getBlockEntity(task.pos);
-                            if (te != null) {
-                                NbtCompound nbt = task.tileEntity.copy();
-                                nbt.putInt("x", task.pos.getX());
-                                nbt.putInt("y", task.pos.getY());
-                                nbt.putInt("z", task.pos.getZ());
-
-                                long tT0 = System.nanoTime();
-                                try {
-                                    te.readNbt(nbt);
-                                    if (cfg.clearInventories && te instanceof Inventory) {
-                                        ((Inventory) te).clear();
-                                    }
-                                } catch (Exception e) {
-                                    SchemPaste.LOGGER.warn("Failed to load BlockEntity data for {} @ {}", task.state, task.pos);
-                                }
-                                long tT1 = System.nanoTime();
-                                nsTe = (tT1 - tT0);
-                                qCountWithTe.incrementAndGet();
-                            }
-                        }
-
-                        qNsGetState.addAndGet(nsGet);
-                        qNsClearOldTe.addAndGet(nsClear);
-                        qNsSetBlock.addAndGet(nsSet);
-                        qNsApplyTe.addAndGet(nsTe);
-                        qCountPlaced.incrementAndGet();
-
-                        double getMs = nsGet / 1_000_000.0;
-                        double clearMs = nsClear / 1_000_000.0;
-                        double setMs = nsSet / 1_000_000.0;
-                        double teMs = nsTe / 1_000_000.0;
-                        double totalMs = getMs + clearMs + setMs + teMs;
-                        if (totalMs >= SLOW_SAMPLE_THRESHOLD_MS) {
-                            synchronized (qSlowSamples) {
-                                if (qSlowSamples.size() >= MAX_SLOW_SAMPLES) {
-                                    qSlowSamples.removeFirst();
-                                }
-                                qSlowSamples.addLast(new SlowSample(task.pos, totalMs, getMs, clearMs, setMs, teMs));
-                            }
-                        }
-                    }
-
-
-                    job.placedBlocks.incrementAndGet();
-                    job.queuedBlocks.decrementAndGet();
-
-                    decrementGlobalChunkCount(task.chunkPos);
-                    globalQueuedTasks.decrementAndGet();
+                    continue;
                 }
-            } catch (Exception e) {
-                SchemPaste.LOGGER.error("Error placing block at {}: {}", task.pos, e.getMessage());
-            }
-            processed++;
 
+                long nsClear = 0L;
+                if (stateOld.hasBlockEntity() && (!task.state.hasBlockEntity() || task.tileEntity != null)) {
+                    long tC0 = System.nanoTime();
+                    //#if MC < 12000
+                    int flags = Block.NOTIFY_LISTENERS | Block.NOTIFY_NEIGHBORS | Block.FORCE_STATE | Block.SKIP_DROPS | Block.SKIP_LIGHTING_UPDATES;
+                    //#else
+                    //$$ int flags = net.minecraft.block.Block.NOTIFY_LISTENERS | net.minecraft.block.Block.NOTIFY_NEIGHBORS | net.minecraft.block.Block.FORCE_STATE | net.minecraft.block.Block.SKIP_DROPS;
+                    //#endif
+                    world.setBlockState(task.pos, Blocks.BARRIER.getDefaultState(), flags);
+                    long tC1 = System.nanoTime();
+                    nsClear = tC1 - tC0;
+                    qCountClearedTe.incrementAndGet();
+                }
+
+                long tS0 = System.nanoTime();
+                //#if MC < 12000
+                int flagsPlace = Block.NOTIFY_LISTENERS | Block.NOTIFY_NEIGHBORS | Block.FORCE_STATE | Block.SKIP_DROPS | Block.SKIP_LIGHTING_UPDATES;
+                //#else
+                //$$ int flagsPlace = net.minecraft.block.Block.NOTIFY_LISTENERS | net.minecraft.block.Block.NOTIFY_NEIGHBORS | net.minecraft.block.Block.FORCE_STATE | net.minecraft.block.Block.SKIP_DROPS;
+                //#endif
+                boolean placedOk = world.setBlockState(task.pos, task.state, flagsPlace);
+                long tS1 = System.nanoTime();
+                long nsSet = tS1 - tS0;
+                if (placedOk) {
+                    long nsTe = 0L;
+                    if (task.tileEntity != null) {
+                        BlockEntity te = world.getBlockEntity(task.pos);
+                        if (te != null) {
+                            NbtCompound nbt = task.tileEntity.copy();
+                            nbt.putInt("x", task.pos.getX());
+                            nbt.putInt("y", task.pos.getY());
+                            nbt.putInt("z", task.pos.getZ());
+
+                            long tT0 = System.nanoTime();
+                            try {
+                                te.readNbt(nbt);
+                                if (cfg.clearInventories && te instanceof Inventory) {
+                                    ((Inventory) te).clear();
+                                }
+                            } catch (Exception e) {
+                                SchemPaste.LOGGER.warn("Failed to load BlockEntity data for {} @ {}", task.state, task.pos);
+                            }
+                            long tT1 = System.nanoTime();
+                            nsTe = tT1 - tT0;
+                            qCountWithTe.incrementAndGet();
+                        }
+                    }
+
+                    qNsGetState.addAndGet(nsGet);
+                    qNsClearOldTe.addAndGet(nsClear);
+                    qNsSetBlock.addAndGet(nsSet);
+                    qNsApplyTe.addAndGet(nsTe);
+                    qCountPlaced.incrementAndGet();
+
+                    double totalMs = (nsGet + nsClear + nsSet + nsTe) / 1_000_000.0;
+                    if (totalMs >= SLOW_SAMPLE_THRESHOLD_MS) {
+                        synchronized (qSlowSamples) {
+                            if (qSlowSamples.size() >= MAX_SLOW_SAMPLES) {
+                                qSlowSamples.removeFirst();
+                            }
+                            qSlowSamples.addLast(new SlowSample(task.pos, totalMs, nsGet / 1_000_000.0, nsClear / 1_000_000.0, nsSet / 1_000_000.0, nsTe / 1_000_000.0));
+                        }
+                    }
+                }
+
+                job.placedBlocks.incrementAndGet();
+                job.queuedBlocks.decrementAndGet();
+
+                decrementGlobalChunkCount(worldKey, task.chunkPos);
+                globalQueuedTasks.decrementAndGet();
+            } finally {
+                if (suppressed) {
+                    try {
+                        net.rms.schempaste.util.WorldUtils.setShouldPreventBlockUpdates(world, false);
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+
+            processed++;
             if ((System.nanoTime() - start) >= budgetNanos) {
                 break;
             }
@@ -345,53 +361,73 @@ public class PasteEngine {
             if (task == null) break;
 
             try {
-                ServerWorld world = server.getWorld(World.OVERWORLD);
-                if (world != null) {
-                    PasteJob job = activeJobs.get(task.jobId);
+                PasteJob job = activeJobs.get(task.jobId);
+                RegistryKey<World> worldKey = job != null ? job.worldKey : task.worldKey;
 
-                    if (job == null || job.cancelled.get() || cancelledJobs.contains(task.jobId)) {
-                        if (job != null) {
-                            job.queuedEntities.decrementAndGet();
-                        }
-                        decrementGlobalChunkCount(task.chunkPos);
-                        globalQueuedTasks.decrementAndGet();
-                        processed++;
-                        if ((System.nanoTime() - start) >= budgetNanos) {
-                            break;
-                        }
-                        continue;
+                if (job == null || job.cancelled.get() || cancelledJobs.contains(task.jobId)) {
+                    if (job != null) {
+                        job.queuedEntities.decrementAndGet();
                     }
-
-                    if (!chunkManager.ensureChunkLoaded(task.chunkPos)) {
-                        entityQueue.offer(task);
-                        if (cfg.enableDynamicChunkLoading && cfg.maxLoadedChunks > 0) {
-                            if (job.pausedByCap.compareAndSet(false, true)) {
-                                long now = System.currentTimeMillis();
-                                long last = job.lastStatusLogMs.get();
-                                if (now - last >= 3000 && job.lastStatusLogMs.compareAndSet(last, now)) {
-                                    // pause notice suppressed
-                                }
-                            }
-                        }
+                    decrementGlobalChunkCount(worldKey, task.chunkPos);
+                    globalQueuedTasks.decrementAndGet();
+                    processed++;
+                    if ((System.nanoTime() - start) >= budgetNanos) {
                         break;
                     }
-                    if (job.pausedByCap.compareAndSet(true, false)) {
-                        long now = System.currentTimeMillis();
-                        long last = job.lastStatusLogMs.get();
-                        if (now - last >= 3000 && job.lastStatusLogMs.compareAndSet(last, now)) {
-                            // resume notice suppressed
+                    continue;
+                }
+
+                ServerWorld world = server.getWorld(worldKey);
+                if (world == null) {
+                    job.queuedEntities.decrementAndGet();
+                    decrementGlobalChunkCount(worldKey, task.chunkPos);
+                    globalQueuedTasks.decrementAndGet();
+                    processed++;
+                    if ((System.nanoTime() - start) >= budgetNanos) {
+                        break;
+                    }
+                    continue;
+                }
+
+                DynamicChunkManager chunkManager = getChunkManager(world);
+                if (chunkManager == null) {
+                    entityQueue.offer(task);
+                    processed++;
+                    if ((System.nanoTime() - start) >= budgetNanos) {
+                        break;
+                    }
+                    continue;
+                }
+
+                if (!chunkManager.ensureChunkLoaded(task.chunkPos)) {
+                    entityQueue.offer(task);
+                    if (cfg.enableDynamicChunkLoading && cfg.maxLoadedChunks > 0) {
+                        if (job.pausedByCap.compareAndSet(false, true)) {
+                            long now = System.currentTimeMillis();
+                            long last = job.lastStatusLogMs.get();
+                            if (now - last >= 3000 && job.lastStatusLogMs.compareAndSet(last, now)) {
+                                // pause notice suppressed
+                            }
                         }
                     }
-
-                    boolean spawned = spawnEntity(task.entityNbt.copy(), world);
-                    if (spawned) {
-                        job.spawnedEntities.incrementAndGet();
-                    }
-                    job.queuedEntities.decrementAndGet();
-
-                    decrementGlobalChunkCount(task.chunkPos);
-                    globalQueuedTasks.decrementAndGet();
+                    break;
                 }
+                if (job.pausedByCap.compareAndSet(true, false)) {
+                    long now = System.currentTimeMillis();
+                    long last = job.lastStatusLogMs.get();
+                    if (now - last >= 3000 && job.lastStatusLogMs.compareAndSet(last, now)) {
+                        // resume notice suppressed
+                    }
+                }
+
+                boolean spawned = spawnEntity(task.entityNbt.copy(), world);
+                if (spawned) {
+                    job.spawnedEntities.incrementAndGet();
+                }
+                job.queuedEntities.decrementAndGet();
+
+                decrementGlobalChunkCount(worldKey, task.chunkPos);
+                globalQueuedTasks.decrementAndGet();
             } catch (Exception e) {
                 SchemPaste.LOGGER.error("Error spawning entity: {}", e.getMessage());
             }
@@ -519,7 +555,13 @@ public class PasteEngine {
             qSlowSamples.clear();
         }
 
-        StatusSnapshot snap = new StatusSnapshot(jobs, chunkManager.getLoadedChunkCount(), SchemPaste.getTps(), SchemPaste.getAverageMspt(), SchemPaste.getLastTickMs(), lastTickMsChunks, lastTickMsQueue, lastTickMsProgress, lastTickMsTotal, qMsGet, qMsClear, qMsSet, qMsTe, qAvgPerBlock, qPlaced, qWithTe, qSkipped, qCleared, slow);
+        int totalLoaded = 0;
+        for (DynamicChunkManager manager : chunkManagers.values()) {
+            totalLoaded += manager.getLoadedChunkCount();
+        }
+        int managedWorlds = chunkManagers.size();
+
+        StatusSnapshot snap = new StatusSnapshot(jobs, totalLoaded, managedWorlds, cfg.maxLoadedChunks, SchemPaste.getTps(), SchemPaste.getAverageMspt(), SchemPaste.getLastTickMs(), lastTickMsChunks, lastTickMsQueue, lastTickMsProgress, lastTickMsTotal, qMsGet, qMsClear, qMsSet, qMsTe, qAvgPerBlock, qPlaced, qWithTe, qSkipped, qCleared, slow);
 
         backgroundExecutor.execute(() -> logStatus(snap));
     }
@@ -575,7 +617,7 @@ public class PasteEngine {
         //         "Status: jobs={}, {}; chunks={}; TPS={}; MSPT={}; tick{{chunks={}ms({}%), queue={}ms({}%), progress={}ms({}%), other={}ms({}%))}}{}{}",
         //         s.jobs.size(),
         //         prog.toString(),
-        //         s.chunksLoaded,
+        //         s.totalChunksLoaded,
         //         String.format(java.util.Locale.ROOT, "%.1f", s.tps),
         //         String.format(java.util.Locale.ROOT, "%.1f", s.mspt),
         //         String.format(java.util.Locale.ROOT, "%.1f", s.msChunks),
@@ -593,7 +635,7 @@ public class PasteEngine {
 
     private void completeJob(PasteJob job) {
         if (job.isCompleted.compareAndSet(false, true)) {
-            ServerWorld world = server.getWorld(World.OVERWORLD);
+            ServerWorld world = server.getWorld(job.worldKey);
             if (world != null) {
                 runPostPlacementUpdates(world, job);
             } else {
@@ -751,7 +793,7 @@ public class PasteEngine {
             layerRange = buildLayerRangeFromConfig();
         }
 
-        PasteJob job = new PasteJob(jobId);
+        PasteJob job = new PasteJob(jobId, world.getRegistryKey());
         job.replaceBehavior = replace;
         activeJobs.put(jobId, job);
 
@@ -760,8 +802,9 @@ public class PasteEngine {
         CompletableFuture.runAsync(() -> {
             try {
                 String posStr = placement.origin.position[0] + "," + placement.origin.position[1] + "," + placement.origin.position[2];
+                String dimStr = world.getRegistryKey().getValue().toString();
                 for (var p : server.getPlayerManager().getPlayerList()) {
-                    p.sendMessage(net.minecraft.text.Text.of("Start staged paste " + name + " @ " + posStr), false);
+                    p.sendMessage(net.minecraft.text.Text.of("Start staged paste " + name + " @ " + posStr + " in " + dimStr), false);
                 }
 
                 processLitematicFileBackground(world, file, placement, replace, finalLayerRange, job);
@@ -1008,10 +1051,10 @@ public class PasteEngine {
 
                         ChunkPos taskChunk = cpos;
                         job.recordDesiredState(worldPos, state);
-                        mainThreadQueue.offer(new BlockPlacementTask(worldPos, taskChunk, state, teNBT, job.id));
+                        mainThreadQueue.offer(new BlockPlacementTask(job.worldKey, worldPos, taskChunk, state, teNBT, job.id));
                         job.queuedBlocks.incrementAndGet();
 
-                        long key = ChunkPos.toLong(taskChunk.x, taskChunk.z);
+                        ChunkKey key = ChunkKey.of(job.worldKey, taskChunk);
                         chunkQueueCounts.computeIfAbsent(key, k -> new AtomicInteger()).incrementAndGet();
                         chunkOwnerJob.putIfAbsent(key, job.id);
                         globalQueuedTasks.incrementAndGet();
@@ -1029,7 +1072,7 @@ public class PasteEngine {
                 if (job.cancelled.get() || cancelledJobs.contains(job.id) || Thread.currentThread().isInterrupted()) {
                     return;
                 }
-                EntityPlacementTask task = buildEntityTask(entityNbt, regionBase, rot, mir, mirSub, layerRange, job.id);
+                EntityPlacementTask task = buildEntityTask(entityNbt, regionBase, rot, mir, mirSub, layerRange, job);
                 if (task != null) {
                     entityTasks.add(task);
                 }
@@ -1059,7 +1102,7 @@ public class PasteEngine {
                     entityQueue.offer(task);
                     job.queuedEntities.incrementAndGet();
 
-                    long key = ChunkPos.toLong(task.chunkPos.x, task.chunkPos.z);
+                    ChunkKey key = ChunkKey.of(job.worldKey, task.chunkPos);
                     chunkQueueCounts.computeIfAbsent(key, k -> new AtomicInteger()).incrementAndGet();
                     chunkOwnerJob.putIfAbsent(key, job.id);
                     globalQueuedTasks.incrementAndGet();
@@ -1081,7 +1124,9 @@ public class PasteEngine {
     }
 
     public void shutdown() {
-        chunkManager.shutdown();
+        for (DynamicChunkManager manager : new java.util.ArrayList<>(chunkManagers.values())) {
+            manager.shutdown();
+        }
         backgroundExecutor.shutdown();
         try {
             if (!backgroundExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
@@ -1129,20 +1174,23 @@ public class PasteEngine {
         }
     }
 
-    private void decrementGlobalChunkCount(ChunkPos chunk) {
-        if (!cfg.enableDynamicChunkLoading || chunk == null) return;
-        long key = ChunkPos.toLong(chunk.x, chunk.z);
+    private void decrementGlobalChunkCount(RegistryKey<World> worldKey, ChunkPos chunk) {
+        if (!cfg.enableDynamicChunkLoading || chunk == null || worldKey == null) return;
+        ChunkKey key = ChunkKey.of(worldKey, chunk);
         AtomicInteger cnt = chunkQueueCounts.get(key);
         if (cnt == null) return;
         int left = cnt.decrementAndGet();
         if (left <= 0) {
             chunkQueueCounts.remove(key);
             chunkOwnerJob.remove(key);
-            server.execute(() -> chunkManager.markChunkForUnload(chunk));
+            DynamicChunkManager manager = chunkManagers.get(worldKey);
+            if (manager != null) {
+                server.execute(() -> manager.markChunkForUnload(chunk));
+            }
         }
     }
 
-    private EntityPlacementTask buildEntityTask(NbtCompound original, BlockPos regionBase, BlockRotation rot, BlockMirror mirMain, BlockMirror mirSub, LayerRange layerRange, String jobId) {
+    private EntityPlacementTask buildEntityTask(NbtCompound original, BlockPos regionBase, BlockRotation rot, BlockMirror mirMain, BlockMirror mirSub, LayerRange layerRange, PasteJob job) {
         if (original == null) return null;
         NbtCompound nbt = original.copy();
         if (!nbt.contains("Pos", NbtElement.LIST_TYPE)) {
@@ -1178,7 +1226,7 @@ public class PasteEngine {
 
         BlockPos floored = new BlockPos(MathHelper.floor(worldPos.x), MathHelper.floor(worldPos.y), MathHelper.floor(worldPos.z));
         ChunkPos chunkPos = new ChunkPos(floored);
-        return new EntityPlacementTask(chunkPos, nbt, jobId);
+        return new EntityPlacementTask(job.worldKey, chunkPos, nbt, job.id);
     }
 
     private void adjustFacing(NbtCompound nbt, BlockMirror mirMain, BlockMirror mirSub, BlockRotation rot) {
@@ -1343,14 +1391,26 @@ public class PasteEngine {
     }
 
     public String getChunkManagerStatus() {
-        if (cfg.enableDynamicChunkLoading) {
-            int max = chunkManager.getMaxLoadedChunks();
-            if (max <= 0) {
-                return String.format("ChunkManager: loaded %d (unlimited)", chunkManager.getLoadedChunkCount());
-            }
-            return String.format("ChunkManager: %d/%d loaded", chunkManager.getLoadedChunkCount(), max);
+        if (!cfg.enableDynamicChunkLoading) {
+            return "ChunkManager: disabled";
         }
-        return "ChunkManager: disabled";
+        int totalLoaded = 0;
+        for (DynamicChunkManager manager : chunkManagers.values()) {
+            totalLoaded += manager.getLoadedChunkCount();
+        }
+        int worlds = chunkManagers.size();
+        int perWorld = cfg.maxLoadedChunks;
+        if (worlds == 0) {
+            if (perWorld <= 0) {
+                return "ChunkManager: no active worlds (unlimited)";
+            }
+            return String.format("ChunkManager: 0/%d loaded (no active worlds)", perWorld);
+        }
+        if (perWorld <= 0) {
+            return String.format("ChunkManager: loaded %d across %d worlds (unlimited)", totalLoaded, worlds);
+        }
+        int totalCap = worlds * perWorld;
+        return String.format("ChunkManager: %d/%d loaded across %d worlds", totalLoaded, totalCap, worlds);
     }
 
     public int getActiveJobCount() {
@@ -1406,7 +1466,9 @@ public class PasteEngine {
 
     private static final class StatusSnapshot {
         final java.util.List<StatusJob> jobs;
-        final int chunksLoaded;
+        final int totalChunksLoaded;
+        final int managedWorlds;
+        final int perWorldCap;
         final double tps;
         final double mspt;
         final double serverTickMs;
@@ -1419,9 +1481,11 @@ public class PasteEngine {
         final int qPlaced, qWithTe, qSkipped, qCleared;
         final java.util.List<SlowSample> slowSamples;
 
-        StatusSnapshot(java.util.List<StatusJob> jobs, int chunksLoaded, double tps, double mspt, double serverTickMs, double msChunks, double msQueue, double msProgress, double msTotal, double qMsGet, double qMsClear, double qMsSet, double qMsTe, double qAvgPerBlock, int qPlaced, int qWithTe, int qSkipped, int qCleared, java.util.List<SlowSample> slowSamples) {
+        StatusSnapshot(java.util.List<StatusJob> jobs, int totalChunksLoaded, int managedWorlds, int perWorldCap, double tps, double mspt, double serverTickMs, double msChunks, double msQueue, double msProgress, double msTotal, double qMsGet, double qMsClear, double qMsSet, double qMsTe, double qAvgPerBlock, int qPlaced, int qWithTe, int qSkipped, int qCleared, java.util.List<SlowSample> slowSamples) {
             this.jobs = jobs;
-            this.chunksLoaded = chunksLoaded;
+            this.totalChunksLoaded = totalChunksLoaded;
+            this.managedWorlds = managedWorlds;
+            this.perWorldCap = perWorldCap;
             this.tps = tps;
             this.mspt = mspt;
             this.serverTickMs = serverTickMs;
@@ -1443,13 +1507,15 @@ public class PasteEngine {
     }
 
     private static class BlockPlacementTask {
+        final RegistryKey<World> worldKey;
         final BlockPos pos;
         final ChunkPos chunkPos;
         final BlockState state;
         final NbtCompound tileEntity;
         final String jobId;
 
-        BlockPlacementTask(BlockPos pos, ChunkPos chunkPos, BlockState state, NbtCompound tileEntity, String jobId) {
+        BlockPlacementTask(RegistryKey<World> worldKey, BlockPos pos, ChunkPos chunkPos, BlockState state, NbtCompound tileEntity, String jobId) {
+            this.worldKey = worldKey;
             this.pos = pos;
             this.chunkPos = chunkPos;
             this.state = state;
@@ -1459,11 +1525,13 @@ public class PasteEngine {
     }
 
     private static class EntityPlacementTask {
+        final RegistryKey<World> worldKey;
         final ChunkPos chunkPos;
         final NbtCompound entityNbt;
         final String jobId;
 
-        EntityPlacementTask(ChunkPos chunkPos, NbtCompound entityNbt, String jobId) {
+        EntityPlacementTask(RegistryKey<World> worldKey, ChunkPos chunkPos, NbtCompound entityNbt, String jobId) {
+            this.worldKey = worldKey;
             this.chunkPos = chunkPos;
             this.entityNbt = entityNbt;
             this.jobId = jobId;
@@ -1472,6 +1540,7 @@ public class PasteEngine {
 
     private static class PasteJob {
         final String id;
+        final RegistryKey<World> worldKey;
         final AtomicInteger totalBlocks = new AtomicInteger(0);
         final AtomicInteger placedBlocks = new AtomicInteger(0);
         final AtomicInteger queuedBlocks = new AtomicInteger(0);
@@ -1493,8 +1562,9 @@ public class PasteEngine {
         long lastProgressTime;
         ReplaceBehavior replaceBehavior = ReplaceBehavior.WITH_NON_AIR;
 
-        PasteJob(String id) {
+        PasteJob(String id, RegistryKey<World> worldKey) {
             this.id = id;
+            this.worldKey = worldKey;
             this.startTime = System.currentTimeMillis();
             this.lastProgressTime = startTime;
         }
@@ -1594,6 +1664,41 @@ public class PasteEngine {
                     return;
                 }
             }
+        }
+    }
+
+    private static final class ChunkKey {
+        final RegistryKey<World> worldKey;
+        final int x;
+        final int z;
+
+        private ChunkKey(RegistryKey<World> worldKey, int x, int z) {
+            this.worldKey = worldKey;
+            this.x = x;
+            this.z = z;
+        }
+
+        static ChunkKey of(RegistryKey<World> worldKey, ChunkPos pos) {
+            if (worldKey == null || pos == null) {
+                throw new IllegalArgumentException("worldKey and pos must not be null");
+            }
+            return new ChunkKey(worldKey, pos.x, pos.z);
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (!(obj instanceof ChunkKey)) return false;
+            ChunkKey other = (ChunkKey) obj;
+            return worldKey.equals(other.worldKey) && x == other.x && z == other.z;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = worldKey.hashCode();
+            result = 31 * result + x;
+            result = 31 * result + z;
+            return result;
         }
     }
 
