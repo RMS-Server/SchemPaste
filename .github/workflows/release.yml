@@ -76,7 +76,7 @@ jobs:
           MOD_ID=$(grep '^id=' gradle.properties | cut -d'=' -f2)
           echo "mod_version=$MOD_VERSION" >> $GITHUB_OUTPUT
           echo "mod_id=$MOD_ID" >> $GITHUB_OUTPUT
-          echo "mod_name=Carpet RMS Addition" >> $GITHUB_OUTPUT
+          echo "mod_name=SchemPaste" >> $GITHUB_OUTPUT
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
@@ -101,8 +101,6 @@ jobs:
           loaders: fabric
           game-versions: |
             ${{ matrix.minecraft_version }}
-          dependencies: |-
-            carpet(required)
   Github-Release:
     runs-on: ubuntu-24.04
     needs: [ Build-Matrix, Get-Versions ]
@@ -118,7 +116,7 @@ jobs:
           MOD_ID=$(grep '^id=' gradle.properties | cut -d'=' -f2)
           echo "mod_version=$MOD_VERSION" >> $GITHUB_OUTPUT
           echo "mod_id=$MOD_ID" >> $GITHUB_OUTPUT
-          echo "mod_name=Carpet RMS Addition" >> $GITHUB_OUTPUT
+          echo "mod_name=SchemPaste" >> $GITHUB_OUTPUT
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
